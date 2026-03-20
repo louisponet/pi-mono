@@ -641,13 +641,14 @@ export async function main(args: string[]) {
 	// First pass: parse args to get --extension paths
 	const firstPass = parseArgs(args);
 
-	// Early load extensions to discover their CLI flags
+	// Early load extensions to discover their CLI flags.
+	// Extensions load BEFORE AuthStorage so that key-assignment extensions
+	// (e.g. nest-key.ts) can set PI_CODING_AGENT_DIR and influence which
+	// auth.json is used for credentials.
 	const cwd = process.cwd();
 	const agentDir = getAgentDir();
 	const settingsManager = SettingsManager.create(cwd, agentDir);
 	reportSettingsErrors(settingsManager, "startup");
-	const authStorage = AuthStorage.create();
-	const modelRegistry = new ModelRegistry(authStorage, getModelsPath());
 
 	const resourceLoader = new DefaultResourceLoader({
 		cwd,
@@ -666,6 +667,12 @@ export async function main(args: string[]) {
 	});
 	await resourceLoader.reload();
 	time("resourceLoader.reload");
+
+	// Create auth/model AFTER extensions load — extensions may have set
+	// PI_CODING_AGENT_DIR (e.g. for OAuth key rotation), which changes
+	// what getAgentDir() returns and thus which auth.json is used.
+	const authStorage = AuthStorage.create();
+	const modelRegistry = new ModelRegistry(authStorage, getModelsPath());
 
 	const extensionsResult: LoadExtensionsResult = resourceLoader.getExtensions();
 	for (const { path, error } of extensionsResult.errors) {
