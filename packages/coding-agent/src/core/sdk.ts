@@ -70,6 +70,16 @@ export interface CreateAgentSessionOptions {
 
 	/** Settings manager. Default: SettingsManager.create(cwd, agentDir) */
 	settingsManager?: SettingsManager;
+
+	/**
+	 * Whether model changes should persist the new default to settings.json.
+	 * Default: false.
+	 *
+	 * Set to true for interactive sessions where the user explicitly chooses a model.
+	 * Non-interactive, SDK, and subagent sessions should leave this false to avoid
+	 * overwriting the user's preferred default model in the shared settings file.
+	 */
+	persistModelChanges?: boolean;
 }
 
 /** Result from createAgentSession */
@@ -349,6 +359,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		modelRegistry,
 		initialActiveToolNames,
 		extensionRunnerRef,
+		persistModelChanges: options.persistModelChanges,
 	});
 	const extensionsResult = resourceLoader.getExtensions();
 
