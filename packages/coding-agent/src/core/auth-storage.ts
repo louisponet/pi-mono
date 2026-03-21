@@ -13,7 +13,7 @@ import {
 	type OAuthProviderId,
 } from "@mariozechner/pi-ai";
 import { getOAuthApiKey, getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai/oauth";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { getAgentDir } from "../config.js";
@@ -40,10 +40,32 @@ type LockResult<T> = {
 export interface AuthStorageBackend {
 	withLock<T>(fn: (current: string | undefined) => LockResult<T>): T;
 	withLockAsync<T>(fn: (current: string | undefined) => Promise<LockResult<T>>): Promise<T>;
+	/** Check if the underlying storage has been modified externally since last read. */
+	hasChanged?(): boolean;
 }
 
 export class FileAuthStorageBackend implements AuthStorageBackend {
+	private lastMtimeMs = 0;
+
 	constructor(private authPath: string = join(getAgentDir(), "auth.json")) {}
+
+	/** Track mtime after reading/writing. */
+	private recordMtime(): void {
+		try {
+			this.lastMtimeMs = statSync(this.authPath).mtimeMs;
+		} catch {
+			/* file may not exist yet */
+		}
+	}
+
+	/** Check if auth.json was modified externally since we last read/wrote it. */
+	hasChanged(): boolean {
+		try {
+			return statSync(this.authPath).mtimeMs !== this.lastMtimeMs;
+		} catch {
+			return false;
+		}
+	}
 
 	private ensureParentDir(): void {
 		const dir = dirname(this.authPath);
@@ -99,6 +121,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 				writeFileSync(this.authPath, next, "utf-8");
 				chmodSync(this.authPath, 0o600);
 			}
+			this.recordMtime();
 			return result;
 		} finally {
 			if (release) {
@@ -144,6 +167,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 				writeFileSync(this.authPath, next, "utf-8");
 				chmodSync(this.authPath, 0o600);
 			}
+			this.recordMtime();
 			throwIfCompromised();
 			return result;
 		} finally {
@@ -439,6 +463,16 @@ export class AuthStorage {
 			if (!provider) {
 				// Unknown OAuth provider, can't get API key
 				return undefined;
+			}
+
+			// Re-read from disk if another process (e.g. Nest KeyManager)
+			// refreshed the token externally. This is a cheap stat() call.
+			if (this.storage.hasChanged?.()) {
+				this.reload();
+				const fresh = this.data[providerId];
+				if (fresh?.type === "oauth" && Date.now() < fresh.expires) {
+					return provider.getApiKey(fresh);
+				}
 			}
 
 			// Check if token needs refresh
