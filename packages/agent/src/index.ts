@@ -4,5 +4,14 @@ export * from "./agent.js";
 export * from "./agent-loop.js";
 // Proxy utilities
 export * from "./proxy.js";
+// Deferred tool utilities
+export {
+	createToolSearchTool,
+	partitionTools,
+	buildDeferredToolsPrompt,
+	buildToolsForLlm,
+	CORE_TOOL_NAMES,
+	type DeferredToolsConfig,
+} from "./tool-search.js";
 // Types
 export * from "./types.js";
