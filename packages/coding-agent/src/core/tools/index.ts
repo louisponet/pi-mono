@@ -21,6 +21,7 @@ export {
 	editTool,
 	editToolDefinition,
 } from "./edit.js";
+export { FileReadTracker } from "./file-read-tracker.js";
 export { withFileMutationQueue } from "./file-mutation-queue.js";
 export {
 	createFindTool,
@@ -84,6 +85,7 @@ export {
 
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ToolDefinition } from "../extensions/types.js";
+import type { FileReadTracker } from "./file-read-tracker.js";
 import {
 	type BashToolOptions,
 	bashTool,
@@ -135,14 +137,17 @@ export type ToolName = keyof typeof allTools;
 export interface ToolsOptions {
 	read?: ReadToolOptions;
 	bash?: BashToolOptions;
+	/** Shared file read tracker for read-before-edit enforcement */
+	fileReadTracker?: FileReadTracker;
 }
 
 export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[] {
+	const tracker = options?.fileReadTracker;
 	return [
-		createReadToolDefinition(cwd, options?.read),
+		createReadToolDefinition(cwd, { ...options?.read, fileReadTracker: tracker }),
 		createBashToolDefinition(cwd, options?.bash),
-		createEditToolDefinition(cwd),
-		createWriteToolDefinition(cwd),
+		createEditToolDefinition(cwd, { fileReadTracker: tracker }),
+		createWriteToolDefinition(cwd, { fileReadTracker: tracker }),
 	];
 }
 
@@ -156,11 +161,12 @@ export function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOption
 }
 
 export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef> {
+	const tracker = options?.fileReadTracker;
 	return {
-		read: createReadToolDefinition(cwd, options?.read),
+		read: createReadToolDefinition(cwd, { ...options?.read, fileReadTracker: tracker }),
 		bash: createBashToolDefinition(cwd, options?.bash),
-		edit: createEditToolDefinition(cwd),
-		write: createWriteToolDefinition(cwd),
+		edit: createEditToolDefinition(cwd, { fileReadTracker: tracker }),
+		write: createWriteToolDefinition(cwd, { fileReadTracker: tracker }),
 		grep: createGrepToolDefinition(cwd),
 		find: createFindToolDefinition(cwd),
 		ls: createLsToolDefinition(cwd),
@@ -168,11 +174,12 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 }
 
 export function createCodingTools(cwd: string, options?: ToolsOptions): Tool[] {
+	const tracker = options?.fileReadTracker;
 	return [
-		createReadTool(cwd, options?.read),
+		createReadTool(cwd, { ...options?.read, fileReadTracker: tracker }),
 		createBashTool(cwd, options?.bash),
-		createEditTool(cwd),
-		createWriteTool(cwd),
+		createEditTool(cwd, { fileReadTracker: tracker }),
+		createWriteTool(cwd, { fileReadTracker: tracker }),
 	];
 }
 
@@ -181,11 +188,12 @@ export function createReadOnlyTools(cwd: string, options?: ToolsOptions): Tool[]
 }
 
 export function createAllTools(cwd: string, options?: ToolsOptions): Record<ToolName, Tool> {
+	const tracker = options?.fileReadTracker;
 	return {
-		read: createReadTool(cwd, options?.read),
+		read: createReadTool(cwd, { ...options?.read, fileReadTracker: tracker }),
 		bash: createBashTool(cwd, options?.bash),
-		edit: createEditTool(cwd),
-		write: createWriteTool(cwd),
+		edit: createEditTool(cwd, { fileReadTracker: tracker }),
+		write: createWriteTool(cwd, { fileReadTracker: tracker }),
 		grep: createGrepTool(cwd),
 		find: createFindTool(cwd),
 		ls: createLsTool(cwd),

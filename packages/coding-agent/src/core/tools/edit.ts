@@ -17,6 +17,7 @@ import {
 	restoreLineEndings,
 	stripBom,
 } from "./edit-diff.js";
+import type { FileReadTracker } from "./file-read-tracker.js";
 import { withFileMutationQueue } from "./file-mutation-queue.js";
 import { resolveToCwd } from "./path-utils.js";
 import { invalidArgText, shortenPath, str } from "./render-utils.js";
@@ -64,6 +65,8 @@ const defaultEditOperations: EditOperations = {
 export interface EditToolOptions {
 	/** Custom operations for file editing. Default: local filesystem */
 	operations?: EditOperations;
+	/** File read tracker for read-before-edit enforcement */
+	fileReadTracker?: FileReadTracker;
 }
 
 function formatEditCall(
@@ -120,13 +123,17 @@ export function createEditToolDefinition(
 	options?: EditToolOptions,
 ): ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState> {
 	const ops = options?.operations ?? defaultEditOperations;
+	const tracker = options?.fileReadTracker;
 	return {
 		name: "edit",
 		label: "edit",
 		description:
 			"Edit a file by replacing exact text. The oldText must match exactly (including whitespace). Use this for precise, surgical edits.",
 		promptSnippet: "Make surgical edits to files (find exact text and replace)",
-		promptGuidelines: ["Use edit for precise changes (old text must match exactly)."],
+		promptGuidelines: [
+			"Use edit for precise changes (old text must match exactly).",
+			"You must read a file before editing it. This ensures you understand the current content and make correct changes.",
+		],
 		parameters: editSchema,
 		async execute(
 			_toolCallId,
@@ -136,6 +143,7 @@ export function createEditToolDefinition(
 			_ctx?,
 		) {
 			const absolutePath = resolveToCwd(path, cwd);
+			const readWarning = tracker?.checkRead(absolutePath) ?? null;
 
 			return withFileMutationQueue(
 				absolutePath,
@@ -270,11 +278,18 @@ export function createEditToolDefinition(
 								}
 
 								const diffResult = generateDiffString(baseContent, newContent);
+								// After a successful edit, record the file as read (we just read it)
+								if (tracker) {
+									tracker.recordRead(absolutePath, false);
+								}
+								const successMsg = readWarning
+									? `${readWarning}\n\nSuccessfully replaced text in ${path}.`
+									: `Successfully replaced text in ${path}.`;
 								resolve({
 									content: [
 										{
 											type: "text",
-											text: `Successfully replaced text in ${path}.`,
+											text: successMsg,
 										},
 									],
 									details: { diff: diffResult.diff, firstChangedLine: diffResult.firstChangedLine },

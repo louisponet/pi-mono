@@ -12,6 +12,7 @@ import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/type
 import { resolveReadPath } from "./path-utils.js";
 import { getTextOutput, invalidArgText, replaceTabs, shortenPath, str } from "./render-utils.js";
 import { wrapToolDefinition } from "./tool-definition-wrapper.js";
+import type { FileReadTracker } from "./file-read-tracker.js";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult, truncateHead } from "./truncate.js";
 
 const readSchema = Type.Object({
@@ -50,6 +51,8 @@ export interface ReadToolOptions {
 	autoResizeImages?: boolean;
 	/** Custom operations for file reading. Default: local filesystem */
 	operations?: ReadOperations;
+	/** File read tracker for read-before-edit enforcement */
+	fileReadTracker?: FileReadTracker;
 }
 
 function formatReadCall(
@@ -117,6 +120,7 @@ export function createReadToolDefinition(
 ): ToolDefinition<typeof readSchema, ReadToolDetails | undefined> {
 	const autoResizeImages = options?.autoResizeImages ?? true;
 	const ops = options?.operations ?? defaultReadOperations;
+	const tracker = options?.fileReadTracker;
 	return {
 		name: "read",
 		label: "read",
@@ -238,6 +242,13 @@ export function createReadToolDefinition(
 
 							if (aborted) return;
 							signal?.removeEventListener("abort", onAbort);
+
+							// Record this read for read-before-edit enforcement
+							if (tracker) {
+								const isPartial = offset !== undefined || limit !== undefined;
+								tracker.recordRead(absolutePath, isPartial);
+							}
+
 							resolve({ content, details });
 						} catch (error: any) {
 							signal?.removeEventListener("abort", onAbort);
