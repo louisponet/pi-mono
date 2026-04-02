@@ -26,6 +26,37 @@ export interface BuildSystemPromptOptions {
 	outputStyle?: string;
 }
 
+/** Code style anti-patterns to prevent over-engineering */
+function getCodeStyleSection(): string {
+	return `
+
+## Code Style
+
+When making changes, follow the principle of minimum necessary complexity:
+
+- Do not add features, refactor code, or make improvements beyond what was asked. A bug fix does not need surrounding code cleaned up. A simple feature does not need extra configurability. Do not add docstrings, comments, or type annotations to code you did not change.
+- Do not add error handling, fallbacks, or validation for scenarios that cannot happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs).
+- Do not create helpers, utilities, or abstractions for one-time operations. Do not design for hypothetical future requirements. Three similar lines of code is better than a premature abstraction.
+- Default to writing no comments. Only add one when the WHY is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific bug, behavior that would surprise a reader. Do not explain WHAT the code does — well-named identifiers already do that. Do not reference the current task or callers — those belong in commit messages and rot as the codebase evolves.
+- Do not hedge with try/catch around code that will not throw. Do not use feature flags or backwards-compatibility shims when you can just change the code.
+- Before reporting a task complete, verify it actually works: run the test, execute the script, check the output. If you cannot verify (no test exists, cannot run the code), say so explicitly rather than claiming success.`;
+}
+
+/** Reversibility and blast-radius guidance for safe action taking */
+function getReversibilitySection(): string {
+	return `
+
+## Action Safety
+
+Before taking any action, consider its reversibility and blast radius:
+
+- **Local, reversible actions** (editing files, running tests, reading code): proceed freely without asking.
+- **Shared or hard-to-reverse actions** (git push, deleting branches, publishing packages, sending messages): confirm with the user first. A user approving an action once does not mean blanket approval — match the scope of your actions to what was actually requested.
+- **Destructive actions** (rm -rf, force push, dropping databases, overwriting unsaved work): always confirm, even if the user said to operate autonomously.
+
+When you encounter an obstacle, do not use destructive actions as a shortcut. Investigate root causes rather than bypassing safety checks (e.g. --no-verify). If you discover unexpected state like unfamiliar files, branches, or configuration, investigate before deleting or overwriting — it may represent the user's in-progress work.`;
+}
+
 function getOutputStyleSection(style: string | undefined): string {
 	switch (style) {
 		case "concise":
@@ -63,6 +94,8 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 	if (customPrompt) {
 		let prompt = customPrompt;
 
+		prompt += getCodeStyleSection();
+		prompt += getReversibilitySection();
 		prompt += getOutputStyleSection(outputStyle);
 
 		if (appendSection) {
@@ -158,6 +191,8 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 - When working on pi topics, read the docs and examples, and follow .md cross-references before implementing
 - Always read pi .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
 
+	prompt += getCodeStyleSection();
+	prompt += getReversibilitySection();
 	prompt += getOutputStyleSection(outputStyle);
 
 	if (appendSection) {
