@@ -4,6 +4,7 @@ import type { Message, Model } from "@mariozechner/pi-ai";
 import { getAgentDir, getDocsPath } from "../config.js";
 import { AgentSession } from "./agent-session.js";
 import { AuthStorage } from "./auth-storage.js";
+import { analyzeContextComposition, applyMicrocompact, applyToolResultLimits } from "./context-management/index.js";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
 import type { ExtensionRunner, LoadExtensionsResult, ToolDefinition } from "./extensions/index.js";
 import { convertToLlm } from "./messages.js";
@@ -302,9 +303,22 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		},
 		sessionId: sessionManager.getSessionId(),
 		transformContext: async (messages) => {
+			// 1. Time-based microcompaction: clear stale tool results after idle gaps.
+			let transformed = applyMicrocompact(messages);
+
+			// 2. Per-turn aggregate tool result limits.
+			transformed = applyToolResultLimits(transformed);
+
+			// 3. Context composition monitoring.
+			const suggestions = analyzeContextComposition(transformed);
+			for (const suggestion of suggestions) {
+				console.warn(`[context] ${suggestion.severity.toUpperCase()}: ${suggestion.title} — ${suggestion.detail}`);
+			}
+
+			// 4. Extension hooks (e.g. structured compaction).
 			const runner = extensionRunnerRef.current;
-			if (!runner) return messages;
-			return runner.emitContext(messages);
+			if (!runner) return transformed;
+			return runner.emitContext(transformed);
 		},
 		steeringMode: settingsManager.getSteeringMode(),
 		followUpMode: settingsManager.getFollowUpMode(),
