@@ -94,6 +94,7 @@ export interface Settings {
 	autocompleteMaxVisible?: number; // Max visible items in autocomplete dropdown (default: 5)
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	markdown?: MarkdownSettings;
+	outputStyle?: "default" | "concise" | "explanatory"; // Controls verbosity of agent responses
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -949,5 +950,15 @@ export class SettingsManager {
 
 	getCodeBlockIndent(): string {
 		return this.settings.markdown?.codeBlockIndent ?? "  ";
+	}
+
+	getOutputStyle(): "default" | "concise" | "explanatory" {
+		return this.settings.outputStyle ?? "default";
+	}
+
+	setOutputStyle(style: "default" | "concise" | "explanatory"): void {
+		this.globalSettings.outputStyle = style;
+		this.markModified("outputStyle");
+		this.save();
 	}
 }

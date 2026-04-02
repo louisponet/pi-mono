@@ -865,6 +865,7 @@ export class AgentSession {
 			selectedTools: validToolNames,
 			toolSnippets,
 			promptGuidelines,
+			outputStyle: this.settingsManager.getOutputStyle(),
 		});
 	}
 

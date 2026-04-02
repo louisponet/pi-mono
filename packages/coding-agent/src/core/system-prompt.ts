@@ -22,6 +22,19 @@ export interface BuildSystemPromptOptions {
 	contextFiles?: Array<{ path: string; content: string }>;
 	/** Pre-loaded skills. */
 	skills?: Skill[];
+	/** Output verbosity style: 'default' | 'concise' | 'explanatory'. Controls verbosity of agent responses. */
+	outputStyle?: string;
+}
+
+function getOutputStyleSection(style: string | undefined): string {
+	switch (style) {
+		case "concise":
+			return `\n\n## Output Style: Concise\n\nBe extremely concise. Focus on code changes and results. Skip explanations, summaries, and status updates unless asked. One-line acknowledgments for simple tasks. No bullet-point recaps of what you did.`;
+		case "explanatory":
+			return `\n\n## Output Style: Explanatory\n\nProvide educational context with your changes. Before and after code modifications, briefly explain:\n- Why this approach was chosen over alternatives\n- Key concepts or patterns being used\n- Potential gotchas or edge cases to be aware of\n\nKeep explanations focused and technical — teach, don't lecture.`;
+		default:
+			return "";
+	}
 }
 
 /** Build the system prompt with tools, guidelines, and context */
@@ -35,6 +48,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 		cwd,
 		contextFiles: providedContextFiles,
 		skills: providedSkills,
+		outputStyle,
 	} = options;
 	const resolvedCwd = cwd ?? process.cwd();
 	const promptCwd = resolvedCwd.replace(/\\/g, "/");
@@ -48,6 +62,8 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 
 	if (customPrompt) {
 		let prompt = customPrompt;
+
+		prompt += getOutputStyleSection(outputStyle);
 
 		if (appendSection) {
 			prompt += appendSection;
@@ -141,6 +157,8 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 - When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), pi packages (docs/packages.md)
 - When working on pi topics, read the docs and examples, and follow .md cross-references before implementing
 - Always read pi .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
+
+	prompt += getOutputStyleSection(outputStyle);
 
 	if (appendSection) {
 		prompt += appendSection;
