@@ -13,6 +13,21 @@ import type {
 import type { Static, TSchema } from "@sinclair/typebox";
 
 /**
+ * Error thrown by tool implementations to signal that the tool call should be retried.
+ * Used for recoverable failures like MCP session expiry or transient connection errors.
+ *
+ * When thrown from a tool's execute(), the agent loop retries the call with exponential backoff.
+ */
+export class ToolRetryableError extends Error {
+	override readonly cause?: Error;
+
+	constructor(message: string, cause?: Error) {
+		super(message, cause ? { cause } : undefined);
+		this.name = "ToolRetryableError";
+	}
+}
+
+/**
  * Stream function used by the agent loop.
  *
  * Contract:

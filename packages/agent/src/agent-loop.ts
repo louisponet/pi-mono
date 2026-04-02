@@ -21,6 +21,7 @@ import type {
 	AgentToolResult,
 	StreamFn,
 } from "./types.js";
+import { ToolRetryableError } from "./types.js";
 
 export type AgentEventSink = (event: AgentEvent) => Promise<void> | void;
 
@@ -521,41 +522,90 @@ async function prepareToolCall(
 	}
 }
 
+const MAX_TOOL_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 1000;
+
+/** Check if an error looks like an MCP session expiry */
+function isMcpSessionError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const msg = error.message.toLowerCase();
+	const code = (error as any).code;
+	// HTTP 404 with session context
+	if (msg.includes("404") && (msg.includes("session") || msg.includes("mcp"))) return true;
+	// JSON-RPC -32001 (session expired)
+	if (code === -32001 || msg.includes("-32001")) return true;
+	// JSON-RPC -32000 (connection closed)
+	if ((code === -32000 || msg.includes("-32000")) && msg.includes("connection closed")) return true;
+	return false;
+}
+
 async function executePreparedToolCall(
 	prepared: PreparedToolCall,
 	signal: AbortSignal | undefined,
 	emit: AgentEventSink,
 ): Promise<ExecutedToolCallOutcome> {
-	const updateEvents: Promise<void>[] = [];
+	let lastError: Error | undefined;
 
-	try {
-		const result = await prepared.tool.execute(
-			prepared.toolCall.id,
-			prepared.args as never,
-			signal,
-			(partialResult) => {
-				updateEvents.push(
-					Promise.resolve(
-						emit({
-							type: "tool_execution_update",
-							toolCallId: prepared.toolCall.id,
-							toolName: prepared.toolCall.name,
-							args: prepared.toolCall.arguments,
-							partialResult,
-						}),
-					),
-				);
-			},
-		);
-		await Promise.all(updateEvents);
-		return { result, isError: false };
-	} catch (error) {
-		await Promise.all(updateEvents);
-		return {
-			result: createErrorToolResult(error instanceof Error ? error.message : String(error)),
-			isError: true,
-		};
+	for (let attempt = 0; attempt < MAX_TOOL_RETRIES; attempt++) {
+		if (attempt > 0) {
+			const delay = BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
+			await new Promise((resolve) => setTimeout(resolve, delay));
+
+			// Emit retry attempt as tool execution update
+			await emit({
+				type: "tool_execution_update",
+				toolCallId: prepared.toolCall.id,
+				toolName: prepared.toolCall.name,
+				args: prepared.toolCall.arguments,
+				partialResult: {
+					content: [{ type: "text", text: `Retrying tool call (attempt ${attempt + 1}/${MAX_TOOL_RETRIES})...` }],
+					details: {},
+				},
+			});
+		}
+
+		const updateEvents: Promise<void>[] = [];
+		try {
+			const result = await prepared.tool.execute(
+				prepared.toolCall.id,
+				prepared.args as never,
+				signal,
+				(partialResult) => {
+					updateEvents.push(
+						Promise.resolve(
+							emit({
+								type: "tool_execution_update",
+								toolCallId: prepared.toolCall.id,
+								toolName: prepared.toolCall.name,
+								args: prepared.toolCall.arguments,
+								partialResult,
+							}),
+						),
+					);
+				},
+			);
+			await Promise.all(updateEvents);
+			return { result, isError: false };
+		} catch (error) {
+			await Promise.all(updateEvents);
+			lastError = error instanceof Error ? error : new Error(String(error));
+
+			const isRetryable = error instanceof ToolRetryableError || isMcpSessionError(error);
+			if (!isRetryable || attempt >= MAX_TOOL_RETRIES - 1) {
+				return {
+					result: createErrorToolResult(lastError.message),
+					isError: true,
+				};
+			}
+			// Continue to next attempt
+		}
 	}
+
+	// Should not reach here, but just in case
+	return {
+		result: createErrorToolResult(lastError?.message ?? "Tool execution failed after retries"),
+		isError: true,
+	};
 }
 
 async function finalizeExecutedToolCall(
