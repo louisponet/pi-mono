@@ -183,6 +183,12 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	getFollowUpMessages?: () => Promise<AgentMessage[]>;
 
 	/**
+	 * Timeout in ms for stalled API streams. If no event is received within this period,
+	 * the stream is aborted. Set to 0 to disable. Default: 120000 (2 minutes).
+	 */
+	streamStallTimeoutMs?: number;
+
+	/**
 	 * Tool execution mode.
 	 * - "sequential": execute tool calls one by one
 	 * - "parallel": preflight tool calls sequentially, then execute allowed tools concurrently
