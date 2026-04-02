@@ -377,6 +377,12 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	promptSnippet?: string;
 	/** Optional guideline bullets appended to the default system prompt Guidelines section when this tool is active. */
 	promptGuidelines?: string[];
+	/**
+	 * When true, this tool is deferred — only its name and description are sent to the LLM initially.
+	 * The LLM must call tool_search to load the full schema before using it.
+	 * Defaults to true for extension tools registered via registerTool().
+	 */
+	deferred?: boolean;
 	/** Parameter schema (TypeBox) */
 	parameters: TParams;
 
