@@ -578,6 +578,15 @@ export class AgentSession {
 					});
 					this._retryAttempt = 0;
 				}
+
+				// Emit success for max_tokens recovery when model finishes normally
+				if (assistantMsg.stopReason !== "length" && this._maxTokensRecoveryCount > 0) {
+					this._emit({
+						type: "max_tokens_recovery_end",
+						success: true,
+						attempt: this._maxTokensRecoveryCount,
+					});
+				}
 			}
 		}
 
@@ -2499,8 +2508,9 @@ export class AgentSession {
 	}
 
 	/**
-	 * Handle retryable errors with exponential backoff.
-	 * @returns true if retry was initiated, false if max retries exceeded or disabled
+	 * Handle max_tokens truncation (stopReason === "length").
+	 * Injects a recovery message and continues, with diminishing returns detection.
+	 * @returns true if recovery was initiated, false if max attempts exceeded or diminishing returns detected
 	 */
 	private async _handleMaxTokensTruncation(message: AssistantMessage): Promise<boolean> {
 		const MAX_OUTPUT_TOKEN_RECOVERIES = 3;

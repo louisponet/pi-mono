@@ -268,34 +268,28 @@ async function streamAssistantResponse(
 	const stallTimeoutMs = config.streamStallTimeoutMs ?? 120_000;
 	const stallAbort = stallTimeoutMs > 0 ? new AbortController() : null;
 	const effectiveSignal =
-		stallAbort !== null
-			? signal
-				? AbortSignal.any([signal, stallAbort.signal])
-				: stallAbort.signal
-			: signal;
+		stallAbort !== null ? (signal ? AbortSignal.any([signal, stallAbort.signal]) : stallAbort.signal) : signal;
 
 	let stallTimer: ReturnType<typeof setTimeout> | undefined;
 	const resetStallTimer = () => {
 		if (!stallAbort || stallAbort.signal.aborted) return;
 		if (stallTimer) clearTimeout(stallTimer);
 		stallTimer = setTimeout(() => {
-			stallAbort.abort(
-				new Error(`API stream stalled: no data received for ${stallTimeoutMs / 1000}s`),
-			);
+			stallAbort.abort(new Error(`API stream stalled: no data received for ${stallTimeoutMs / 1000}s`));
 		}, stallTimeoutMs);
 	};
 	resetStallTimer();
 
-	const response = await streamFunction(config.model, llmContext, {
-		...config,
-		apiKey: resolvedApiKey,
-		signal: effectiveSignal,
-	});
-
-	let partialMessage: AssistantMessage | null = null;
-	let addedPartial = false;
-
 	try {
+		const response = await streamFunction(config.model, llmContext, {
+			...config,
+			apiKey: resolvedApiKey,
+			signal: effectiveSignal,
+		});
+
+		let partialMessage: AssistantMessage | null = null;
+		let addedPartial = false;
+
 		for await (const event of response) {
 			resetStallTimer();
 			switch (event.type) {
