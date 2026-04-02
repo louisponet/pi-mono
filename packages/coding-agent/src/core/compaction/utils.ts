@@ -168,3 +168,27 @@ export function serializeConversation(messages: Message[]): string {
 export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI coding assistant, then produce a structured summary following the exact format specified.
 
 Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.`;
+
+// ============================================================================
+// Dual-pass summary formatting
+// ============================================================================
+
+/**
+ * Strip the `<analysis>` scratchpad block from a dual-pass summary response
+ * and extract the content inside `<summary>` tags.
+ *
+ * If no `<summary>` tags are present the raw response (minus any analysis
+ * block) is returned. Leading/trailing whitespace is trimmed.
+ */
+export function formatCompactSummary(rawResponse: string): string {
+	// Remove any <analysis>...</analysis> block (may span multiple lines).
+	const withoutAnalysis = rawResponse.replace(/<analysis>[\s\S]*?<\/analysis>/g, "");
+
+	// Extract content from <summary>...</summary> tags if present.
+	const summaryMatch = withoutAnalysis.match(/<summary>([\s\S]*?)<\/summary>/);
+	if (summaryMatch) {
+		return summaryMatch[1].trim();
+	}
+
+	return withoutAnalysis.trim();
+}
