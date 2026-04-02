@@ -20,6 +20,7 @@ import type {
 	AgentTool,
 	BeforeToolCallContext,
 	BeforeToolCallResult,
+	DeferredToolsConfig,
 	StreamFn,
 	ToolExecutionMode,
 } from "./types.js";
@@ -107,6 +108,8 @@ export interface AgentOptions {
 	transport?: Transport;
 	maxRetryDelayMs?: number;
 	toolExecution?: ToolExecutionMode;
+	/** Configuration for deferred tool loading. */
+	deferredTools?: DeferredToolsConfig;
 }
 
 class PendingMessageQueue {
@@ -184,6 +187,8 @@ export class Agent {
 	public maxRetryDelayMs?: number;
 	/** Tool execution strategy for assistant messages that contain multiple tool calls. */
 	public toolExecution: ToolExecutionMode;
+	/** Configuration for deferred tool loading. */
+	public deferredTools?: DeferredToolsConfig;
 
 	constructor(options: AgentOptions = {}) {
 		this._state = createMutableAgentState(options.initialState);
@@ -201,6 +206,7 @@ export class Agent {
 		this.transport = options.transport ?? "sse";
 		this.maxRetryDelayMs = options.maxRetryDelayMs;
 		this.toolExecution = options.toolExecution ?? "parallel";
+		this.deferredTools = options.deferredTools;
 	}
 
 	/**
@@ -415,6 +421,7 @@ export class Agent {
 			thinkingBudgets: this.thinkingBudgets,
 			maxRetryDelayMs: this.maxRetryDelayMs,
 			toolExecution: this.toolExecution,
+			deferredTools: this.deferredTools,
 			beforeToolCall: this.beforeToolCall,
 			afterToolCall: this.afterToolCall,
 			convertToLlm: this.convertToLlm,

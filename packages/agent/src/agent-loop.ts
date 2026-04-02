@@ -22,6 +22,12 @@ import type {
 	StreamFn,
 } from "./types.js";
 import { ToolRetryableError } from "./types.js";
+import {
+	buildDeferredToolsPrompt,
+	buildToolsForLlm,
+	createToolSearchTool,
+	partitionTools,
+} from "./tool-search.js";
 
 export type AgentEventSink = (event: AgentEvent) => Promise<void> | void;
 
@@ -150,6 +156,12 @@ function createAgentStream(): EventStream<AgentEvent, AgentMessage[]> {
 	);
 }
 
+/** State threaded through per-iteration loop calls when deferred tools are active. */
+type DeferredState = {
+	deferredTools: AgentTool[];
+	activatedToolNames: Set<string>;
+};
+
 /**
  * Main loop logic shared by agentLoop and agentLoopContinue.
  */
@@ -164,6 +176,23 @@ async function runLoop(
 	let firstTurn = true;
 	// Check for steering messages at start (user may have typed while waiting)
 	let pendingMessages: AgentMessage[] = (await config.getSteeringMessages?.()) || [];
+
+	// Set up deferred tool state once for the full loop run
+	const allTools = currentContext.tools ?? [];
+	const { coreTools, deferredTools } = partitionTools(allTools, config.deferredTools);
+	const activatedToolNames = new Set<string>();
+	const deferredState: DeferredState | undefined =
+		deferredTools.length > 0 ? { deferredTools, activatedToolNames } : undefined;
+
+	// Create tool_search once — it closes over the mutable activatedToolNames set
+	const toolSearchTool = deferredState
+		? createToolSearchTool(deferredTools, activatedToolNames)
+		: undefined;
+
+	if (deferredState && toolSearchTool) {
+		// Add tool_search to the execution context so prepareToolCall can find it
+		currentContext.tools = [...allTools, toolSearchTool];
+	}
 
 	// Outer loop: continues when queued follow-up messages arrive after agent would stop
 	while (true) {
@@ -188,8 +217,25 @@ async function runLoop(
 				pendingMessages = [];
 			}
 
+			// Build the LLM context for this turn (apply deferred tool filtering if active)
+			let llmContext = currentContext;
+			if (deferredState && toolSearchTool) {
+				const { deferredTools: deferred, activatedToolNames: activated } = deferredState;
+				const llmTools = buildToolsForLlm(coreTools, deferred, activated);
+				const remaining = deferred.filter((t) => !activated.has(t.name));
+				const deferredPrompt = buildDeferredToolsPrompt(remaining);
+				llmContext = {
+					// Share the messages array so streamAssistantResponse can push to it
+					messages: currentContext.messages,
+					tools: [...llmTools, toolSearchTool],
+					systemPrompt: deferredPrompt
+						? `${currentContext.systemPrompt}\n\n${deferredPrompt}`
+						: currentContext.systemPrompt,
+				};
+			}
+
 			// Stream assistant response
-			const message = await streamAssistantResponse(currentContext, config, signal, emit, streamFn);
+			const message = await streamAssistantResponse(llmContext, config, signal, emit, streamFn);
 			newMessages.push(message);
 
 			if (message.stopReason === "error" || message.stopReason === "aborted") {
@@ -204,7 +250,12 @@ async function runLoop(
 
 			const toolResults: ToolResultMessage[] = [];
 			if (hasMoreToolCalls) {
-				toolResults.push(...(await executeToolCalls(currentContext, message, config, signal, emit)));
+				// Execute against the full context (all tools available for lookup)
+				toolResults.push(
+					...(
+						await executeToolCalls(currentContext, message, config, signal, emit, deferredState)
+					),
+				);
 
 				for (const result of toolResults) {
 					currentContext.messages.push(result);
@@ -361,12 +412,29 @@ async function executeToolCalls(
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 	emit: AgentEventSink,
+	deferredState?: DeferredState,
 ): Promise<ToolResultMessage[]> {
 	const toolCalls = assistantMessage.content.filter((c) => c.type === "toolCall");
 	if (config.toolExecution === "sequential") {
-		return executeToolCallsSequential(currentContext, assistantMessage, toolCalls, config, signal, emit);
+		return executeToolCallsSequential(
+			currentContext,
+			assistantMessage,
+			toolCalls,
+			config,
+			signal,
+			emit,
+			deferredState,
+		);
 	}
-	return executeToolCallsParallel(currentContext, assistantMessage, toolCalls, config, signal, emit);
+	return executeToolCallsParallel(
+		currentContext,
+		assistantMessage,
+		toolCalls,
+		config,
+		signal,
+		emit,
+		deferredState,
+	);
 }
 
 async function executeToolCallsSequential(
@@ -376,6 +444,7 @@ async function executeToolCallsSequential(
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 	emit: AgentEventSink,
+	deferredState?: DeferredState,
 ): Promise<ToolResultMessage[]> {
 	const results: ToolResultMessage[] = [];
 
@@ -387,7 +456,14 @@ async function executeToolCallsSequential(
 			args: toolCall.arguments,
 		});
 
-		const preparation = await prepareToolCall(currentContext, assistantMessage, toolCall, config, signal);
+		const preparation = await prepareToolCall(
+			currentContext,
+			assistantMessage,
+			toolCall,
+			config,
+			signal,
+			deferredState,
+		);
 		if (preparation.kind === "immediate") {
 			results.push(await emitToolCallOutcome(toolCall, preparation.result, preparation.isError, emit));
 		} else {
@@ -416,6 +492,7 @@ async function executeToolCallsParallel(
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 	emit: AgentEventSink,
+	deferredState?: DeferredState,
 ): Promise<ToolResultMessage[]> {
 	const results: ToolResultMessage[] = [];
 	const runnableCalls: PreparedToolCall[] = [];
@@ -428,7 +505,14 @@ async function executeToolCallsParallel(
 			args: toolCall.arguments,
 		});
 
-		const preparation = await prepareToolCall(currentContext, assistantMessage, toolCall, config, signal);
+		const preparation = await prepareToolCall(
+			currentContext,
+			assistantMessage,
+			toolCall,
+			config,
+			signal,
+			deferredState,
+		);
 		if (preparation.kind === "immediate") {
 			results.push(await emitToolCallOutcome(toolCall, preparation.result, preparation.isError, emit));
 		} else {
@@ -497,14 +581,41 @@ async function prepareToolCall(
 	toolCall: AgentToolCall,
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
+	deferredState?: DeferredState,
 ): Promise<PreparedToolCall | ImmediateToolCallOutcome> {
 	const tool = currentContext.tools?.find((t) => t.name === toolCall.name);
 	if (!tool) {
+		// Check if this is a deferred tool that hasn't been activated yet
+		if (deferredState) {
+			const isDeferred = deferredState.deferredTools.some((t) => t.name === toolCall.name);
+			if (isDeferred) {
+				return {
+					kind: "immediate",
+					result: createErrorToolResult(
+						`Tool "${toolCall.name}" is deferred. Use tool_search('select:${toolCall.name}') to load its schema first.`,
+					),
+					isError: true,
+				};
+			}
+		}
 		return {
 			kind: "immediate",
 			result: createErrorToolResult(`Tool ${toolCall.name} not found`),
 			isError: true,
 		};
+	}
+
+	// Guard against calling a deferred tool that was found in context but not yet activated
+	if (deferredState && deferredState.deferredTools.some((t) => t.name === tool.name)) {
+		if (!deferredState.activatedToolNames.has(tool.name)) {
+			return {
+				kind: "immediate",
+				result: createErrorToolResult(
+					`Tool "${tool.name}" is deferred. Use tool_search('select:${tool.name}') to load its schema first.`,
+				),
+				isError: true,
+			};
+		}
 	}
 
 	try {

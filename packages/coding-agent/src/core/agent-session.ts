@@ -334,6 +334,12 @@ export class AgentSession {
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
 		this._installAgentToolHooks();
 
+		// Enable auto-deferral if the caller hasn't configured it already.
+		// Auto mode activates when tool count exceeds the default threshold (20).
+		if (this.agent.deferredTools === undefined) {
+			this.agent.deferredTools = {};
+		}
+
 		this._buildRuntime({
 			activeToolNames: this._initialActiveToolNames,
 			includeAllExtensionTools: true,

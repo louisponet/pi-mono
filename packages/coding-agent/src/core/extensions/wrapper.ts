@@ -13,9 +13,15 @@ import type { RegisteredTool } from "./types.js";
 /**
  * Wrap a RegisteredTool into an AgentTool.
  * Uses the runner's createContext() for consistent context across tools and event handlers.
+ * Extension tools default to deferred:true unless explicitly set to false.
  */
 export function wrapRegisteredTool(registeredTool: RegisteredTool, runner: ExtensionRunner): AgentTool {
-	return wrapToolDefinition(registeredTool.definition, () => runner.createContext());
+	const wrapped = wrapToolDefinition(registeredTool.definition, () => runner.createContext());
+	// Extension tools are deferred by default — only opt out by setting deferred:false explicitly
+	if (wrapped.deferred === undefined) {
+		wrapped.deferred = true;
+	}
+	return wrapped;
 }
 
 /**
