@@ -7,7 +7,6 @@ import { keyHint } from "../../modes/interactive/components/keybinding-hints.js"
 import { getLanguageFromPath, highlightCode } from "../../modes/interactive/theme/theme.js";
 import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.js";
 import { withFileMutationQueue } from "./file-mutation-queue.js";
-import type { FileReadTracker } from "./file-read-tracker.js";
 import { resolveToCwd } from "./path-utils.js";
 import { invalidArgText, normalizeDisplayText, replaceTabs, shortenPath, str } from "./render-utils.js";
 import { wrapToolDefinition } from "./tool-definition-wrapper.js";
@@ -38,8 +37,6 @@ const defaultWriteOperations: WriteOperations = {
 export interface WriteToolOptions {
 	/** Custom operations for file writing. Default: local filesystem */
 	operations?: WriteOperations;
-	/** File read tracker for read-before-write enforcement */
-	fileReadTracker?: FileReadTracker;
 }
 
 type WriteHighlightCache = {
@@ -186,7 +183,6 @@ export function createWriteToolDefinition(
 	options?: WriteToolOptions,
 ): ToolDefinition<typeof writeSchema, undefined> {
 	const ops = options?.operations ?? defaultWriteOperations;
-	const tracker = options?.fileReadTracker;
 	return {
 		name: "write",
 		label: "write",
@@ -206,7 +202,6 @@ export function createWriteToolDefinition(
 			_ctx?,
 		) {
 			const absolutePath = resolveToCwd(path, cwd);
-			const readWarning = tracker?.checkRead(absolutePath) ?? null;
 			const dir = dirname(absolutePath);
 			return withFileMutationQueue(
 				absolutePath,
@@ -232,13 +227,7 @@ export function createWriteToolDefinition(
 									await ops.writeFile(absolutePath, content);
 									if (aborted) return;
 									signal?.removeEventListener("abort", onAbort);
-									// After a successful write, record the file as read
-									if (tracker) {
-										tracker.recordRead(absolutePath, false);
-									}
-									const successMsg = readWarning
-										? `${readWarning}\n\nSuccessfully wrote ${content.length} bytes to ${path}`
-										: `Successfully wrote ${content.length} bytes to ${path}`;
+									const successMsg = `Successfully wrote ${content.length} bytes to ${path}`;
 									resolve({
 										content: [{ type: "text", text: successMsg }],
 										details: undefined,
