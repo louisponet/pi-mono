@@ -182,6 +182,7 @@ interface SingleResult {
 	errorMessage?: string;
 	step?: number;
 	structuredOutput?: StructuredSummary;
+	progressFile?: string;
 }
 
 interface SubagentDetails {
@@ -189,6 +190,7 @@ interface SubagentDetails {
 	agentScope: AgentScope;
 	projectAgentsDir: string | null;
 	results: SingleResult[];
+	progressDir?: string;
 }
 
 function getFinalOutput(messages: Message[]): string {
@@ -356,6 +358,44 @@ async function runSingleAgent(
 		step,
 	};
 
+	// Progress tracking
+	const startedAt = Date.now();
+	let toolCallCount = 0;
+	let lastToolName: string | undefined;
+	let lastProgressWrite = 0;
+	const PROGRESS_THROTTLE_MS = 2000;
+	let progressPath: string | null = null;
+	try {
+		const progressDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pi-subagent-prog-"));
+		progressPath = path.join(progressDir, "progress.json");
+		currentResult.progressFile = progressPath;
+	} catch {
+		// Non-fatal: progress tracking is optional
+	}
+
+	const writeProgress = (status: "running" | "completed" | "failed") => {
+		if (!progressPath) return;
+		const now = Date.now();
+		if (status === "running" && now - lastProgressWrite < PROGRESS_THROTTLE_MS) return;
+		lastProgressWrite = now;
+		const progressData = {
+			agent: agentName,
+			task: task.slice(0, 200),
+			startedAt,
+			turns: currentResult.usage.turns,
+			toolCalls: toolCallCount,
+			lastTool: lastToolName,
+			status,
+			usage: currentResult.usage,
+			updatedAt: now,
+		};
+		try {
+			fs.writeFileSync(progressPath, JSON.stringify(progressData, null, 2));
+		} catch {
+			// ignore
+		}
+	};
+
 	const emitUpdate = () => {
 		if (onUpdate) {
 			onUpdate({
@@ -399,6 +439,12 @@ async function runSingleAgent(
 					currentResult.messages.push(msg);
 
 					if (msg.role === "assistant") {
+						for (const part of msg.content) {
+							if (part.type === "toolCall") {
+								toolCallCount++;
+								lastToolName = part.name;
+							}
+						}
 						currentResult.usage.turns++;
 						const usage = msg.usage;
 						if (usage) {
@@ -413,11 +459,13 @@ async function runSingleAgent(
 						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
 						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
 					}
+					writeProgress("running");
 					emitUpdate();
 				}
 
 				if (event.type === "tool_result_end" && event.message) {
 					currentResult.messages.push(event.message as Message);
+					writeProgress("running");
 					emitUpdate();
 				}
 			};
@@ -458,6 +506,7 @@ async function runSingleAgent(
 		currentResult.exitCode = exitCode;
 		const structuredSummary = parseStructuredSummary(getFinalOutput(currentResult.messages));
 		if (structuredSummary) currentResult.structuredOutput = structuredSummary;
+		writeProgress(exitCode === 0 ? "completed" : "failed");
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
 	} finally {
