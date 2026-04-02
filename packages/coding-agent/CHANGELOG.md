@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added code style anti-patterns to system prompt that prevent agent over-engineering (no unnecessary refactors, no speculative abstractions, no comments unless WHY is non-obvious, verify before reporting complete)
+- Added reversibility/blast-radius guidance to system prompt (local actions proceed freely, shared actions confirm first, destructive actions always confirm)
+- Added read-before-edit enforcement via `FileReadTracker`. The edit and write tools now warn when modifying a file that hasn't been read in the current session, preventing blind edits
+- Added output style system with `concise` and `explanatory` modes. Configure via `settings.outputStyle` to control agent response verbosity
+
 ### Fixed
 
 - Fixed `/export` HTML backgrounds to honor `theme.export.pageBg`, `cardBg`, and `infoBg` instead of always deriving them from `userMessageBg` ([#2565](https://github.com/badlogic/pi-mono/issues/2565))
