@@ -15,6 +15,7 @@ import {
 	stripBom,
 } from "./edit-diff.js";
 import { withFileMutationQueue } from "./file-mutation-queue.js";
+import type { FileReadTracker } from "./file-read-tracker.js";
 import { resolveToCwd } from "./path-utils.js";
 import { invalidArgText, shortenPath, str } from "./render-utils.js";
 import { wrapToolDefinition } from "./tool-definition-wrapper.js";
@@ -78,6 +79,8 @@ const defaultEditOperations: EditOperations = {
 export interface EditToolOptions {
 	/** Custom operations for file editing. Default: local filesystem */
 	operations?: EditOperations;
+	/** File read tracker for read-before-edit enforcement */
+	fileReadTracker?: FileReadTracker;
 }
 
 function prepareEditArguments(input: unknown): EditToolInput {
@@ -155,6 +158,7 @@ export function createEditToolDefinition(
 	options?: EditToolOptions,
 ): ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState> {
 	const ops = options?.operations ?? defaultEditOperations;
+	const tracker = options?.fileReadTracker;
 	return {
 		name: "edit",
 		label: "edit",
@@ -167,12 +171,14 @@ export function createEditToolDefinition(
 			"When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls",
 			"Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.",
 			"Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.",
+			"You must read a file before editing it. This ensures you understand the current content and make correct changes.",
 		],
 		parameters: editSchema,
 		prepareArguments: prepareEditArguments,
 		async execute(_toolCallId, input: EditToolInput, signal?: AbortSignal, _onUpdate?, _ctx?) {
 			const { path, edits } = validateEditInput(input);
 			const absolutePath = resolveToCwd(path, cwd);
+			const readWarning = tracker?.checkRead(absolutePath) ?? null;
 
 			return withFileMutationQueue(
 				absolutePath,
@@ -256,11 +262,17 @@ export function createEditToolDefinition(
 								}
 
 								const diffResult = generateDiffString(baseContent, newContent);
+								// After a successful edit, record the file as read (we just read it)
+								if (tracker) {
+									tracker.recordRead(absolutePath, false);
+								}
+								const baseMsg = `Successfully replaced ${edits.length} block(s) in ${path}.`;
+								const successMsg = readWarning ? `${readWarning}\n\n${baseMsg}` : baseMsg;
 								resolve({
 									content: [
 										{
 											type: "text",
-											text: `Successfully replaced ${edits.length} block(s) in ${path}.`,
+											text: successMsg,
 										},
 									],
 									details: { diff: diffResult.diff, firstChangedLine: diffResult.firstChangedLine },

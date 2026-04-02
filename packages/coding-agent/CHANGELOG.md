@@ -5,6 +5,10 @@
 ### Added
 
 - Added label timestamps to the session tree with a `Shift+T` toggle in `/tree`, smart date formatting, and timestamp preservation through branching ([#2691](https://github.com/badlogic/pi-mono/pull/2691) by [@w-winter](https://github.com/w-winter))
+- Added code style anti-patterns to system prompt that prevent agent over-engineering (no unnecessary refactors, no speculative abstractions, no comments unless WHY is non-obvious, verify before reporting complete)
+- Added reversibility/blast-radius guidance to system prompt (local actions proceed freely, shared actions confirm first, destructive actions always confirm)
+- Added read-before-edit enforcement via `FileReadTracker`. The edit and write tools now warn when modifying a file that hasn't been read in the current session, preventing blind edits
+- Added output style system with `concise` and `explanatory` modes. Configure via `settings.outputStyle` to control agent response verbosity
 
 ## [0.64.0] - 2026-03-29
 

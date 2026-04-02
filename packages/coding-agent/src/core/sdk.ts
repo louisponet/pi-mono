@@ -327,7 +327,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			for (const suggestion of suggestions) {
 				const lastLogged = contextSuggestionLastLogged.get(suggestion.title) ?? 0;
 				if (now - lastLogged > 5 * 60 * 1000) {
-					console.warn(`[context] ${suggestion.severity.toUpperCase()}: ${suggestion.title} — ${suggestion.detail}`);
+					console.warn(
+						`[context] ${suggestion.severity.toUpperCase()}: ${suggestion.title} — ${suggestion.detail}`,
+					);
 					contextSuggestionLastLogged.set(suggestion.title, now);
 				}
 			}

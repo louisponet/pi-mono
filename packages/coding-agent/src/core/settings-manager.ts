@@ -95,6 +95,7 @@ export interface Settings {
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	markdown?: MarkdownSettings;
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
+	outputStyle?: "default" | "concise" | "explanatory"; // Controls verbosity of agent responses
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -954,5 +955,15 @@ export class SettingsManager {
 
 	getCodeBlockIndent(): string {
 		return this.settings.markdown?.codeBlockIndent ?? "  ";
+	}
+
+	getOutputStyle(): "default" | "concise" | "explanatory" {
+		return this.settings.outputStyle ?? "default";
+	}
+
+	setOutputStyle(style: "default" | "concise" | "explanatory"): void {
+		this.globalSettings.outputStyle = style;
+		this.markModified("outputStyle");
+		this.save();
 	}
 }
