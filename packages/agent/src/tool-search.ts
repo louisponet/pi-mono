@@ -10,9 +10,6 @@
 import { type Static, Type } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult, DeferredToolsConfig } from "./types.js";
 
-// Re-export DeferredToolsConfig for convenience when importing from tool-search
-export type { DeferredToolsConfig } from "./types.js";
-
 /** Core tools that are never deferred regardless of configuration. */
 export const CORE_TOOL_NAMES = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
 

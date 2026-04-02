@@ -11,7 +11,6 @@ export {
 	buildDeferredToolsPrompt,
 	buildToolsForLlm,
 	CORE_TOOL_NAMES,
-	type DeferredToolsConfig,
 } from "./tool-search.js";
 // Types
 export * from "./types.js";

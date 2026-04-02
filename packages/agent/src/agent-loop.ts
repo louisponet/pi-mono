@@ -184,9 +184,13 @@ async function runLoop(
 	const deferredState: DeferredState | undefined =
 		deferredTools.length > 0 ? { deferredTools, activatedToolNames } : undefined;
 
-	if (deferredState) {
+	// Create tool_search once — it closes over the mutable activatedToolNames set
+	const toolSearchTool = deferredState
+		? createToolSearchTool(deferredTools, activatedToolNames)
+		: undefined;
+
+	if (deferredState && toolSearchTool) {
 		// Add tool_search to the execution context so prepareToolCall can find it
-		const toolSearchTool = createToolSearchTool(deferredTools, activatedToolNames);
 		currentContext.tools = [...allTools, toolSearchTool];
 	}
 
@@ -215,9 +219,8 @@ async function runLoop(
 
 			// Build the LLM context for this turn (apply deferred tool filtering if active)
 			let llmContext = currentContext;
-			if (deferredState) {
+			if (deferredState && toolSearchTool) {
 				const { deferredTools: deferred, activatedToolNames: activated } = deferredState;
-				const toolSearchTool = createToolSearchTool(deferred, activated);
 				const llmTools = buildToolsForLlm(coreTools, deferred, activated);
 				const remaining = deferred.filter((t) => !activated.has(t.name));
 				const deferredPrompt = buildDeferredToolsPrompt(remaining);
