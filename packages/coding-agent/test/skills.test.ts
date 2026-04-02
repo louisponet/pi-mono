@@ -23,6 +23,7 @@ function createTestSkill(options: {
 		baseDir: options.baseDir,
 		sourceInfo: createSyntheticSourceInfo(options.filePath, { source: options.source ?? "test" }),
 		disableModelInvocation: options.disableModelInvocation ?? false,
+		paths: [],
 	};
 }
 

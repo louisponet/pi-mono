@@ -1,4 +1,6 @@
 // Core session management
+// Re-export agent-core types useful to extension authors
+export { ToolRetryableError } from "@mariozechner/pi-agent-core";
 
 // Config paths
 export { getAgentDir, VERSION } from "./config.js";
