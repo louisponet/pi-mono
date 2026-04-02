@@ -101,7 +101,7 @@ export function applyMicrocompact(
 		// Replace content with a single text notice.
 		return {
 			...msg,
-			content: [{ type: "text", text: notice }],
+			content: [{ type: "text" as const, text: notice }],
 		} as AgentMessage;
 	});
 }

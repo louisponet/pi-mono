@@ -7,7 +7,7 @@
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { AssistantMessage, TextContent, ToolResultMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage, ImageContent, TextContent, ToolResultMessage } from "@mariozechner/pi-ai";
 
 // ============================================================================
 // Configuration
@@ -41,22 +41,24 @@ function getTextContent(msg: AgentMessage): string {
 }
 
 function truncateContent(
-	content: (TextContent | { type: string; text?: string })[],
+	content: (TextContent | ImageContent)[],
 	maxChars: number,
 	reason: string,
-): TextContent[] {
+): (TextContent | ImageContent)[] {
 	const text = content
 		.filter((c): c is TextContent => c.type === "text")
 		.map((c) => c.text)
 		.join("");
 
 	if (text.length <= maxChars) {
-		return content.filter((c): c is TextContent => c.type === "text");
+		return content;
 	}
 
+	const nonText = content.filter((c): c is ImageContent => c.type !== "text");
 	const truncatedChars = text.length - maxChars;
 	return [
 		{ type: "text" as const, text: `${text.slice(0, maxChars)}[... truncated ${truncatedChars} chars, ${reason}]` },
+		...nonText,
 	];
 }
 
