@@ -232,6 +232,13 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * The hook receives the agent abort signal and is responsible for honoring it.
 	 */
 	afterToolCall?: (context: AfterToolCallContext, signal?: AbortSignal) => Promise<AfterToolCallResult | undefined>;
+
+	/**
+	 * Configuration for deferred tool loading. When enabled, tools marked as deferred
+	 * are only sent as name+description to the LLM, reducing context overhead.
+	 * The LLM uses the tool_search tool to fetch full schemas on demand.
+	 */
+	deferredTools?: DeferredToolsConfig;
 }
 
 /**
@@ -309,10 +316,29 @@ export interface AgentToolResult<T> {
 /** Callback used by tools to stream partial execution updates. */
 export type AgentToolUpdateCallback<T = any> = (partialResult: AgentToolResult<T>) => void;
 
+/**
+ * Configuration for deferred tool loading.
+ * When enabled, non-core tools are only sent to the LLM as names/descriptions
+ * via the deferred tools list. The LLM fetches full schemas with tool_search.
+ */
+export interface DeferredToolsConfig {
+	/** Enable deferral. Default: auto — enabled when tool count exceeds minToolsForDeferral. */
+	enabled?: boolean;
+	/** Minimum total tool count to trigger auto-deferral. Default: 20. */
+	minToolsForDeferral?: number;
+	/** Tool names that are never deferred regardless of the deferred flag. Default: CORE_TOOL_NAMES. */
+	coreToolNames?: Set<string>;
+}
+
 /** Tool definition used by the agent runtime. */
 export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> extends Tool<TParameters> {
 	/** Human-readable label for UI display. */
 	label: string;
+	/**
+	 * When true, this tool is deferred — only its name and description are sent to the LLM
+	 * initially. The full schema must be fetched via tool_search before calling the tool.
+	 */
+	deferred?: boolean;
 	/**
 	 * Optional compatibility shim for raw tool-call arguments before schema validation.
 	 * Must return an object that matches `TParameters`.
