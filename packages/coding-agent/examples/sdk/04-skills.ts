@@ -21,6 +21,7 @@ const customSkill: Skill = {
 	baseDir: "/virtual",
 	sourceInfo: createSyntheticSourceInfo("/virtual/SKILL.md", { source: "sdk" }),
 	disableModelInvocation: false,
+	paths: [],
 };
 
 const loader = new DefaultResourceLoader({

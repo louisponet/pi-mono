@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
+import { existsSync, globSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import ignore from "ignore";
 import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
@@ -68,6 +68,7 @@ export interface SkillFrontmatter {
 	name?: string;
 	description?: string;
 	"disable-model-invocation"?: boolean;
+	paths?: string | string[];
 	[key: string]: unknown;
 }
 
@@ -78,6 +79,8 @@ export interface Skill {
 	baseDir: string;
 	sourceInfo: SourceInfo;
 	disableModelInvocation: boolean;
+	/** Glob patterns that must match at least one file for this skill to activate. Empty = always active. */
+	paths: string[];
 }
 
 export interface LoadSkillsResult {
@@ -310,6 +313,18 @@ function loadSkillFromFile(
 			return { skill: null, diagnostics };
 		}
 
+		// Parse paths for conditional activation
+		const rawPaths = frontmatter.paths;
+		let paths: string[] = [];
+		if (typeof rawPaths === "string") {
+			paths = rawPaths
+				.split(/[,\n]/)
+				.map((p) => p.trim())
+				.filter(Boolean);
+		} else if (Array.isArray(rawPaths)) {
+			paths = rawPaths.map((p) => String(p).trim()).filter(Boolean);
+		}
+
 		return {
 			skill: {
 				name,
@@ -318,6 +333,7 @@ function loadSkillFromFile(
 				baseDir: skillDir,
 				sourceInfo: createSkillSourceInfo(filePath, skillDir, source),
 				disableModelInvocation: frontmatter["disable-model-invocation"] === true,
+				paths,
 			},
 			diagnostics,
 		};
@@ -371,6 +387,30 @@ function escapeXml(str: string): string {
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;")
 		.replace(/'/g, "&apos;");
+}
+
+/**
+ * Check if a skill's path patterns match any files in the project directory.
+ * Returns true if the skill has no paths (always active) or if at least one pattern matches.
+ */
+/** Directories to skip during glob traversal for performance. */
+const GLOB_EXCLUDE_DIRS = new Set(["node_modules", ".git", "dist", ".next", "__pycache__", ".tox", "target"]);
+
+function checkSkillPaths(skill: Skill, cwd: string): boolean {
+	if (skill.paths.length === 0) return true;
+
+	for (const pattern of skill.paths) {
+		try {
+			const matches = globSync(pattern, {
+				cwd,
+				exclude: (name) => GLOB_EXCLUDE_DIRS.has(name),
+			});
+			if (matches.length > 0) return true;
+		} catch {
+			// Invalid pattern, skip
+		}
+	}
+	return false;
 }
 
 export interface LoadSkillsOptions {
@@ -501,8 +541,23 @@ export function loadSkills(options: LoadSkillsOptions = {}): LoadSkillsResult {
 		}
 	}
 
+	// Filter skills by path patterns
+	const resolvedCwd = resolve(cwd);
+	const filteredSkills = Array.from(skillMap.values()).filter((skill) => {
+		if (skill.paths.length === 0) return true;
+		const matches = checkSkillPaths(skill, resolvedCwd);
+		if (!matches) {
+			allDiagnostics.push({
+				type: "warning",
+				message: `skill skipped: no files match paths [${skill.paths.join(", ")}]`,
+				path: skill.filePath,
+			});
+		}
+		return matches;
+	});
+
 	return {
-		skills: Array.from(skillMap.values()),
+		skills: filteredSkills,
 		diagnostics: [...allDiagnostics, ...collisionDiagnostics],
 	};
 }
