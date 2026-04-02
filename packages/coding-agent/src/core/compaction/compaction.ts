@@ -490,7 +490,9 @@ Output format:
 
 const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
 
-Update the existing structured summary with new information. RULES:
+First, produce an <analysis> block where you review the new messages: identify what changed, what was completed, what new decisions were made, and what the current state is. This block is a private scratchpad — it will be stripped from the final output.
+
+Then produce a <summary> block with the updated structured summary. RULES:
 - PRESERVE all existing information from the previous summary
 - ADD new progress, decisions, and context from the new messages
 - UPDATE the Progress section: move items from "In Progress" to "Done" when completed
@@ -498,7 +500,7 @@ Update the existing structured summary with new information. RULES:
 - PRESERVE exact file paths, function names, and error messages
 - If something is no longer relevant, you may remove it
 
-Use this EXACT format:
+Use this EXACT format inside the <summary> tags:
 
 ## Goal
 [Preserve existing goals, add new ones if the task expanded]
@@ -525,7 +527,15 @@ Use this EXACT format:
 ## Critical Context
 - [Preserve important context, add new if needed]
 
-Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+Keep each section concise. Preserve exact file paths, function names, and error messages.
+
+Output format:
+<analysis>
+[your private analysis here]
+</analysis>
+<summary>
+[the updated structured summary here]
+</summary>`;
 
 /**
  * Generate a summary of the conversation using the LLM.

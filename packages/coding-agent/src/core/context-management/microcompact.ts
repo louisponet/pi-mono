@@ -7,6 +7,7 @@
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AssistantMessage, ToolResultMessage } from "@mariozechner/pi-ai";
 
 // ============================================================================
 // Configuration
@@ -63,8 +64,8 @@ export function applyMicrocompact(
 	let lastAssistantTs: number | undefined;
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i];
-		if (msg.role === "assistant" && "timestamp" in msg) {
-			lastAssistantTs = (msg as { timestamp: number }).timestamp;
+		if (msg.role === "assistant") {
+			lastAssistantTs = (msg as AssistantMessage).timestamp;
 			break;
 		}
 	}
@@ -83,7 +84,7 @@ export function applyMicrocompact(
 	const compactableIndices: number[] = [];
 	for (let i = 0; i < messages.length; i++) {
 		const msg = messages[i];
-		if (msg.role === "toolResult" && COMPACTABLE_TOOLS.has((msg as { toolName: string }).toolName)) {
+		if (msg.role === "toolResult" && COMPACTABLE_TOOLS.has((msg as ToolResultMessage).toolName)) {
 			compactableIndices.push(i);
 		}
 	}

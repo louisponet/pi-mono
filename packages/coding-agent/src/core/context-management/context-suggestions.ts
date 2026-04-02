@@ -7,6 +7,7 @@
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AssistantMessage, ToolResultMessage, UserMessage } from "@mariozechner/pi-ai";
 
 // ============================================================================
 // Types
@@ -25,7 +26,7 @@ export interface ContextSuggestion {
 
 function getToolResultTextLength(msg: AgentMessage): number {
 	if (msg.role !== "toolResult") return 0;
-	const tr = msg as { role: "toolResult"; content: Array<{ type: string; text?: string }> };
+	const tr = msg as ToolResultMessage;
 	return tr.content
 		.filter((c): c is { type: "text"; text: string } => c.type === "text")
 		.reduce((sum, c) => sum + c.text.length, 0);
@@ -36,17 +37,17 @@ function getMessageTextLength(msg: AgentMessage): number {
 		case "toolResult":
 			return getToolResultTextLength(msg);
 		case "assistant": {
-			const a = msg as { role: "assistant"; content: Array<{ type: string; text?: string; thinking?: string }> };
+			const a = msg as AssistantMessage;
 			return a.content.reduce((sum, c) => {
-				if (c.type === "text" && c.text) return sum + c.text.length;
-				if (c.type === "thinking" && c.thinking) return sum + c.thinking.length;
+				if (c.type === "text") return sum + c.text.length;
+				if (c.type === "thinking") return sum + c.thinking.length;
 				return sum;
 			}, 0);
 		}
 		case "user": {
-			const u = msg as { role: "user"; content: string | Array<{ type: string; text?: string }> };
+			const u = msg as UserMessage;
 			if (typeof u.content === "string") return u.content.length;
-			return u.content.reduce((sum, c) => sum + (c.type === "text" && c.text ? c.text.length : 0), 0);
+			return u.content.reduce((sum, c) => sum + (c.type === "text" ? c.text.length : 0), 0);
 		}
 		default:
 			return 0;
@@ -65,11 +66,11 @@ function checkDuplicateFileReads(messages: AgentMessage[]): ContextSuggestion[] 
 
 	for (const msg of messages) {
 		if (msg.role !== "assistant") continue;
-		const a = msg as { role: "assistant"; content: Array<{ type: string; name?: string; arguments?: unknown }> };
+		const a = msg as AssistantMessage;
 		for (const block of a.content) {
 			if (block.type !== "toolCall" || block.name !== "read") continue;
-			const args = block.arguments as Record<string, unknown> | undefined;
-			if (!args || typeof args.path !== "string") continue;
+			const args = block.arguments as Record<string, unknown>;
+			if (typeof args.path !== "string") continue;
 			readCounts.set(args.path, (readCounts.get(args.path) ?? 0) + 1);
 		}
 	}
@@ -99,7 +100,7 @@ function checkToolTypeDomination(messages: AgentMessage[]): ContextSuggestion[] 
 		totalContextChars += len;
 
 		if (msg.role === "toolResult") {
-			const tr = msg as { role: "toolResult"; toolName: string };
+			const tr = msg as ToolResultMessage;
 			toolTypeTotals.set(tr.toolName, (toolTypeTotals.get(tr.toolName) ?? 0) + len);
 		}
 	}

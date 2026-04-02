@@ -285,6 +285,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	};
 
 	const extensionRunnerRef: { current?: ExtensionRunner } = {};
+	const contextSuggestionLastLogged = new Map<string, number>();
 
 	agent = new Agent({
 		initialState: {
@@ -309,10 +310,15 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			// 2. Per-turn aggregate tool result limits.
 			transformed = applyToolResultLimits(transformed);
 
-			// 3. Context composition monitoring.
+			// 3. Context composition monitoring (debounced — log each unique title at most once per 5 min).
 			const suggestions = analyzeContextComposition(transformed);
+			const now = Date.now();
 			for (const suggestion of suggestions) {
-				console.warn(`[context] ${suggestion.severity.toUpperCase()}: ${suggestion.title} — ${suggestion.detail}`);
+				const lastLogged = contextSuggestionLastLogged.get(suggestion.title) ?? 0;
+				if (now - lastLogged > 5 * 60 * 1000) {
+					console.warn(`[context] ${suggestion.severity.toUpperCase()}: ${suggestion.title} — ${suggestion.detail}`);
+					contextSuggestionLastLogged.set(suggestion.title, now);
+				}
 			}
 
 			// 4. Extension hooks (e.g. structured compaction).

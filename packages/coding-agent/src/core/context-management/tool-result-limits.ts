@@ -7,6 +7,7 @@
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AssistantMessage, TextContent, ToolResultMessage } from "@mariozechner/pi-ai";
 
 // ============================================================================
 // Configuration
@@ -32,25 +33,25 @@ export const DEFAULT_TOOL_RESULT_LIMITS_CONFIG: ToolResultLimitsConfig = {
 
 function getTextContent(msg: AgentMessage): string {
 	if (msg.role !== "toolResult") return "";
-	const toolResult = msg as { role: "toolResult"; content: Array<{ type: string; text?: string }> };
+	const toolResult = msg as ToolResultMessage;
 	return toolResult.content
-		.filter((c): c is { type: "text"; text: string } => c.type === "text")
+		.filter((c): c is TextContent => c.type === "text")
 		.map((c) => c.text)
 		.join("");
 }
 
 function truncateContent(
-	content: Array<{ type: string; text?: string }>,
+	content: (TextContent | { type: string; text?: string })[],
 	maxChars: number,
 	reason: string,
-): Array<{ type: "text"; text: string }> {
+): TextContent[] {
 	const text = content
-		.filter((c): c is { type: "text"; text: string } => c.type === "text")
+		.filter((c): c is TextContent => c.type === "text")
 		.map((c) => c.text)
 		.join("");
 
 	if (text.length <= maxChars) {
-		return content.filter((c): c is { type: "text"; text: string } => c.type === "text");
+		return content.filter((c): c is TextContent => c.type === "text");
 	}
 
 	const truncatedChars = text.length - maxChars;
@@ -88,13 +89,10 @@ export function applyToolResultLimits(
 		if (msg.role !== "assistant") continue;
 
 		// Collect the toolCallIds emitted by this assistant message.
-		const assistantMsg = msg as {
-			role: "assistant";
-			content: Array<{ type: string; id?: string }>;
-		};
+		const assistantMsg = msg as AssistantMessage;
 		const toolCallIds = new Set<string>();
 		for (const block of assistantMsg.content) {
-			if (block.type === "toolCall" && "id" in block && typeof block.id === "string") {
+			if (block.type === "toolCall") {
 				toolCallIds.add(block.id);
 			}
 		}
@@ -118,14 +116,7 @@ export function applyToolResultLimits(
 
 		// First pass: apply the per-result cap.
 		for (const idx of turnResultIndices) {
-			const r = result[idx] as {
-				role: "toolResult";
-				toolCallId: string;
-				toolName: string;
-				content: Array<{ type: string; text?: string }>;
-				isError: boolean;
-				timestamp: number;
-			};
+			const r = result[idx] as ToolResultMessage;
 			const text = getTextContent(result[idx]);
 			if (text.length > config.maxSingleToolResult) {
 				result[idx] = {
@@ -148,14 +139,7 @@ export function applyToolResultLimits(
 		for (const idx of sortedBySize) {
 			if (totalChars <= config.maxToolResultsPerTurn) break;
 
-			const r = result[idx] as {
-				role: "toolResult";
-				toolCallId: string;
-				toolName: string;
-				content: Array<{ type: string; text?: string }>;
-				isError: boolean;
-				timestamp: number;
-			};
+			const r = result[idx] as ToolResultMessage;
 			const currentSize = getTextContent(result[idx]).length;
 			const budget = config.maxToolResultsPerTurn - (totalChars - currentSize);
 			const cappedBudget = Math.max(0, budget);
