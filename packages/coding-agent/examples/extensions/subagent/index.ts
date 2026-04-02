@@ -28,6 +28,27 @@ const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 
+const STRUCTURED_OUTPUT_INSTRUCTION = `## Structured Output
+
+When your task is complete, append a structured summary block at the very end of your final response:
+
+\`\`\`
+<agent-summary>
+status: success | failure | partial
+summary: One-line description of what was done
+files_changed: path/to/file1.ts, path/to/file2.ts
+commits: abc1234 feat: description, def5678 fix: other
+findings: key finding 1, key finding 2
+error: error description (only if status is failure)
+</agent-summary>
+\`\`\`
+
+Rules:
+- Always include \`status\` and \`summary\`
+- \`files_changed\`, \`commits\`, \`findings\` are optional \u2014 include only if applicable
+- Keep the summary concise (under 100 chars)
+- The block must be the very last thing in your response`;
+
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
 	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
@@ -139,6 +160,15 @@ interface UsageStats {
 	turns: number;
 }
 
+interface StructuredSummary {
+	status: "success" | "failure" | "partial";
+	summary: string;
+	filesChanged?: string[];
+	commits?: string[];
+	findings?: string[];
+	error?: string;
+}
+
 interface SingleResult {
 	agent: string;
 	agentSource: "user" | "project" | "unknown";
@@ -151,6 +181,8 @@ interface SingleResult {
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
+	structuredOutput?: StructuredSummary;
+	progressFile?: string;
 }
 
 interface SubagentDetails {
@@ -158,6 +190,7 @@ interface SubagentDetails {
 	agentScope: AgentScope;
 	projectAgentsDir: string | null;
 	results: SingleResult[];
+	progressDir?: string;
 }
 
 function getFinalOutput(messages: Message[]): string {
@@ -170,6 +203,48 @@ function getFinalOutput(messages: Message[]): string {
 		}
 	}
 	return "";
+}
+
+function parseStructuredSummary(text: string): StructuredSummary | null {
+	const lower = text.toLowerCase();
+	const startTag = "<agent-summary>";
+	const endTag = "</agent-summary>";
+	const startIdx = lower.indexOf(startTag);
+	const endIdx = lower.indexOf(endTag);
+	if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return null;
+
+	const block = text.slice(startIdx + startTag.length, endIdx).trim();
+	const map: Record<string, string> = {};
+	for (const line of block.split("\n")) {
+		const colonIdx = line.indexOf(":");
+		if (colonIdx === -1) continue;
+		const key = line.slice(0, colonIdx).trim().toLowerCase();
+		const value = line.slice(colonIdx + 1).trim();
+		if (key && value) map[key] = value;
+	}
+
+	if (!map.status || !map.summary) return null;
+	const status = map.status as StructuredSummary["status"];
+	if (status !== "success" && status !== "failure" && status !== "partial") return null;
+
+	const result: StructuredSummary = { status, summary: map.summary };
+	if (map.files_changed)
+		result.filesChanged = map.files_changed
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
+	if (map.commits)
+		result.commits = map.commits
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
+	if (map.findings)
+		result.findings = map.findings
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
+	if (map.error) result.error = map.error;
+	return result;
 }
 
 type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, any> };
@@ -212,7 +287,10 @@ async function writePromptToTempFile(agentName: string, prompt: string): Promise
 	const safeName = agentName.replace(/[^\w.-]+/g, "_");
 	const filePath = path.join(tmpDir, `prompt-${safeName}.md`);
 	await withFileMutationQueue(filePath, async () => {
-		await fs.promises.writeFile(filePath, prompt, { encoding: "utf-8", mode: 0o600 });
+		await fs.promises.writeFile(filePath, `${prompt}\n\n${STRUCTURED_OUTPUT_INSTRUCTION}`, {
+			encoding: "utf-8",
+			mode: 0o600,
+		});
 	});
 	return { dir: tmpDir, filePath };
 }
@@ -280,6 +358,44 @@ async function runSingleAgent(
 		step,
 	};
 
+	// Progress tracking
+	const startedAt = Date.now();
+	let toolCallCount = 0;
+	let lastToolName: string | undefined;
+	let lastProgressWrite = 0;
+	const PROGRESS_THROTTLE_MS = 2000;
+	let progressPath: string | null = null;
+	try {
+		const progressDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pi-subagent-prog-"));
+		progressPath = path.join(progressDir, "progress.json");
+		currentResult.progressFile = progressPath;
+	} catch {
+		// Non-fatal: progress tracking is optional
+	}
+
+	const writeProgress = (status: "running" | "completed" | "failed") => {
+		if (!progressPath) return;
+		const now = Date.now();
+		if (status === "running" && now - lastProgressWrite < PROGRESS_THROTTLE_MS) return;
+		lastProgressWrite = now;
+		const progressData = {
+			agent: agentName,
+			task: task.slice(0, 200),
+			startedAt,
+			turns: currentResult.usage.turns,
+			toolCalls: toolCallCount,
+			lastTool: lastToolName,
+			status,
+			usage: currentResult.usage,
+			updatedAt: now,
+		};
+		try {
+			fs.writeFileSync(progressPath, JSON.stringify(progressData, null, 2));
+		} catch {
+			// ignore
+		}
+	};
+
 	const emitUpdate = () => {
 		if (onUpdate) {
 			onUpdate({
@@ -323,6 +439,12 @@ async function runSingleAgent(
 					currentResult.messages.push(msg);
 
 					if (msg.role === "assistant") {
+						for (const part of msg.content) {
+							if (part.type === "toolCall") {
+								toolCallCount++;
+								lastToolName = part.name;
+							}
+						}
 						currentResult.usage.turns++;
 						const usage = msg.usage;
 						if (usage) {
@@ -337,11 +459,13 @@ async function runSingleAgent(
 						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
 						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
 					}
+					writeProgress("running");
 					emitUpdate();
 				}
 
 				if (event.type === "tool_result_end" && event.message) {
 					currentResult.messages.push(event.message as Message);
+					writeProgress("running");
 					emitUpdate();
 				}
 			};
@@ -380,6 +504,9 @@ async function runSingleAgent(
 		});
 
 		currentResult.exitCode = exitCode;
+		const structuredSummary = parseStructuredSummary(getFinalOutput(currentResult.messages));
+		if (structuredSummary) currentResult.structuredOutput = structuredSummary;
+		writeProgress(exitCode === 0 ? "completed" : "failed");
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
 	} finally {
@@ -655,8 +782,12 @@ export default function (pi: ExtensionAPI) {
 						isError: true,
 					};
 				}
+				const singleOutput = getFinalOutput(result.messages) || "(no output)";
+				const summaryLine = result.structuredOutput
+					? `Status: ${result.structuredOutput.status} \u2014 ${result.structuredOutput.summary}\n\n`
+					: "";
 				return {
-					content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
+					content: [{ type: "text", text: summaryLine + singleOutput }],
 					details: makeDetails("single")([result]),
 				};
 			}
@@ -774,6 +905,31 @@ export default function (pi: ExtensionAPI) {
 							container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 						}
 					}
+					if (r.structuredOutput) {
+						const s = r.structuredOutput;
+						container.addChild(new Spacer(1));
+						container.addChild(
+							new Text(theme.fg("muted", "\u2500\u2500\u2500 Summary \u2500\u2500\u2500"), 0, 0),
+						);
+						const statusColor = s.status === "success" ? "success" : s.status === "failure" ? "error" : "warning";
+						container.addChild(
+							new Text(`${theme.fg(statusColor, s.status)} ${theme.fg("dim", s.summary)}`, 0, 0),
+						);
+						if (s.filesChanged?.length)
+							container.addChild(
+								new Text(theme.fg("muted", "files: ") + theme.fg("dim", s.filesChanged.join(", ")), 0, 0),
+							);
+						if (s.commits?.length)
+							container.addChild(
+								new Text(theme.fg("muted", "commits: ") + theme.fg("dim", s.commits.join(", ")), 0, 0),
+							);
+						if (s.findings?.length)
+							container.addChild(
+								new Text(theme.fg("muted", "findings: ") + theme.fg("dim", s.findings.join(", ")), 0, 0),
+							);
+						if (s.error)
+							container.addChild(new Text(theme.fg("muted", "error: ") + theme.fg("error", s.error), 0, 0));
+					}
 					const usageStr = formatUsageStats(r.usage, r.model);
 					if (usageStr) {
 						container.addChild(new Spacer(1));
@@ -789,6 +945,11 @@ export default function (pi: ExtensionAPI) {
 				else {
 					text += `\n${renderDisplayItems(displayItems, COLLAPSED_ITEM_COUNT)}`;
 					if (displayItems.length > COLLAPSED_ITEM_COUNT) text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
+				}
+				if (r.structuredOutput) {
+					const s = r.structuredOutput;
+					const statusColor = s.status === "success" ? "success" : s.status === "failure" ? "error" : "warning";
+					text += `\n${theme.fg(statusColor, s.status)}: ${theme.fg("dim", s.summary)}`;
 				}
 				const usageStr = formatUsageStats(r.usage, r.model);
 				if (usageStr) text += `\n${theme.fg("dim", usageStr)}`;

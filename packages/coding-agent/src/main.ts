@@ -821,6 +821,7 @@ export async function main(args: string[]) {
 	sessionOptions.authStorage = authStorage;
 	sessionOptions.modelRegistry = modelRegistry;
 	sessionOptions.resourceLoader = resourceLoader;
+	sessionOptions.persistModelChanges = isInteractive;
 
 	// Handle CLI --api-key as runtime override (not persisted)
 	if (parsed.apiKey) {

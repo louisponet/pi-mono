@@ -161,6 +161,15 @@ export interface AgentSessionConfig {
 	baseToolsOverride?: Record<string, AgentTool>;
 	/** Mutable ref used by Agent to access the current ExtensionRunner */
 	extensionRunnerRef?: { current?: ExtensionRunner };
+	/**
+	 * Whether model changes (setModel, cycleModel) should persist the new default
+	 * model to settings.json. Default: false.
+	 *
+	 * Set to true for interactive sessions where the user explicitly chooses a model.
+	 * Non-interactive, SDK, and subagent sessions should leave this false to avoid
+	 * overwriting the user's preferred default model.
+	 */
+	persistModelChanges?: boolean;
 }
 
 export interface ExtensionBindings {
@@ -235,6 +244,7 @@ export class AgentSession {
 	readonly settingsManager: SettingsManager;
 
 	private _scopedModels: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
+	private _persistModelChanges: boolean;
 
 	// Event subscription state
 	private _unsubscribeAgent?: () => void;
@@ -303,6 +313,7 @@ export class AgentSession {
 		this.sessionManager = config.sessionManager;
 		this.settingsManager = config.settingsManager;
 		this._scopedModels = config.scopedModels ?? [];
+		this._persistModelChanges = config.persistModelChanges ?? false;
 		this._resourceLoader = config.resourceLoader;
 		this._customTools = config.customTools ?? [];
 		this._cwd = config.cwd;
@@ -1445,7 +1456,9 @@ export class AgentSession {
 		const thinkingLevel = this._getThinkingLevelForModelSwitch();
 		this.agent.state.model = model;
 		this.sessionManager.appendModelChange(model.provider, model.id);
-		this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
+		if (this._persistModelChanges) {
+			this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
+		}
 
 		// Re-clamp thinking level for new model's capabilities
 		this.setThinkingLevel(thinkingLevel);
@@ -1486,7 +1499,9 @@ export class AgentSession {
 		// Apply model
 		this.agent.state.model = next.model;
 		this.sessionManager.appendModelChange(next.model.provider, next.model.id);
-		this.settingsManager.setDefaultModelAndProvider(next.model.provider, next.model.id);
+		if (this._persistModelChanges) {
+			this.settingsManager.setDefaultModelAndProvider(next.model.provider, next.model.id);
+		}
 
 		// Apply thinking level.
 		// - Explicit scoped model thinking level overrides current session level
@@ -1514,7 +1529,9 @@ export class AgentSession {
 		const thinkingLevel = this._getThinkingLevelForModelSwitch();
 		this.agent.state.model = nextModel;
 		this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
-		this.settingsManager.setDefaultModelAndProvider(nextModel.provider, nextModel.id);
+		if (this._persistModelChanges) {
+			this.settingsManager.setDefaultModelAndProvider(nextModel.provider, nextModel.id);
+		}
 
 		// Re-clamp thinking level for new model's capabilities
 		this.setThinkingLevel(thinkingLevel);
