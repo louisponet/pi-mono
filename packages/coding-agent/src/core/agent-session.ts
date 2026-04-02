@@ -128,7 +128,9 @@ export type AgentSessionEvent =
 			errorMessage?: string;
 	  }
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
-	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+	| { type: "max_tokens_recovery_start"; attempt: number; maxAttempts: number }
+	| { type: "max_tokens_recovery_end"; success: boolean; attempt: number; diminishingReturns?: boolean };
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
@@ -271,6 +273,10 @@ export class AgentSession {
 	private _retryAttempt = 0;
 	private _retryPromise: Promise<void> | undefined = undefined;
 	private _retryResolve: (() => void) | undefined = undefined;
+
+	// Max tokens truncation recovery state
+	private _maxTokensRecoveryCount = 0;
+	private _continuationOutputTokens: number[] = [];
 
 	// Bash execution state
 	private _bashAbortController: AbortController | undefined = undefined;
@@ -469,19 +475,26 @@ export class AgentSession {
 			return;
 		}
 
-		const settings = this.settingsManager.getRetrySettings();
-		if (!settings.enabled) {
-			return;
-		}
-
 		const lastAssistant = this._findLastAssistantInMessages(event.messages);
-		if (!lastAssistant || !this._isRetryableError(lastAssistant)) {
+		if (!lastAssistant) {
 			return;
 		}
 
-		this._retryPromise = new Promise((resolve) => {
-			this._retryResolve = resolve;
-		});
+		// Create retry promise for retryable errors
+		const settings = this.settingsManager.getRetrySettings();
+		if (settings.enabled && this._isRetryableError(lastAssistant)) {
+			this._retryPromise = new Promise((resolve) => {
+				this._retryResolve = resolve;
+			});
+			return;
+		}
+
+		// Also create retry promise for max_tokens truncation
+		if (lastAssistant.stopReason === "length") {
+			this._retryPromise = new Promise((resolve) => {
+				this._retryResolve = resolve;
+			});
+		}
 	}
 
 	private _findLastAssistantInMessages(messages: AgentMessage[]): AssistantMessage | undefined {
@@ -499,6 +512,8 @@ export class AgentSession {
 		// This ensures the UI sees the updated queue state
 		if (event.type === "message_start" && event.message.role === "user") {
 			this._overflowRecoveryAttempted = false;
+			this._maxTokensRecoveryCount = 0;
+			this._continuationOutputTokens = [];
 			const messageText = this._getUserMessageText(event.message);
 			if (messageText) {
 				// Check steering queue first
@@ -571,7 +586,13 @@ export class AgentSession {
 			const msg = this._lastAssistantMessage;
 			this._lastAssistantMessage = undefined;
 
-			// Check for retryable errors first (overloaded, rate limit, server errors)
+			// Check for max_tokens truncation (stopReason === "length")
+			if (msg.stopReason === "length") {
+				const didRecover = await this._handleMaxTokensTruncation(msg);
+				if (didRecover) return;
+			}
+
+			// Check for retryable errors (overloaded, rate limit, server errors)
 			if (this._isRetryableError(msg)) {
 				const didRetry = await this._handleRetryableError(msg);
 				if (didRetry) return; // Retry was initiated, don't proceed to compaction
@@ -2481,6 +2502,70 @@ export class AgentSession {
 	 * Handle retryable errors with exponential backoff.
 	 * @returns true if retry was initiated, false if max retries exceeded or disabled
 	 */
+	private async _handleMaxTokensTruncation(message: AssistantMessage): Promise<boolean> {
+		const MAX_OUTPUT_TOKEN_RECOVERIES = 3;
+		const DIMINISHING_THRESHOLD = 500;
+
+		// Track output tokens from this continuation
+		const outputTokens = message.usage?.output ?? 0;
+		this._continuationOutputTokens.push(outputTokens);
+
+		// Check diminishing returns: 3+ consecutive low-token responses
+		if (this._continuationOutputTokens.length >= 3) {
+			const recent = this._continuationOutputTokens.slice(-3);
+			if (recent.every((t) => t < DIMINISHING_THRESHOLD)) {
+				this._emit({
+					type: "max_tokens_recovery_end",
+					success: false,
+					attempt: this._maxTokensRecoveryCount,
+					diminishingReturns: true,
+				});
+				this._resolveRetry();
+				return false;
+			}
+		}
+
+		// Check max recovery attempts
+		if (this._maxTokensRecoveryCount >= MAX_OUTPUT_TOKEN_RECOVERIES) {
+			this._emit({
+				type: "max_tokens_recovery_end",
+				success: false,
+				attempt: this._maxTokensRecoveryCount,
+			});
+			this._resolveRetry();
+			return false;
+		}
+
+		this._maxTokensRecoveryCount++;
+
+		this._emit({
+			type: "max_tokens_recovery_start",
+			attempt: this._maxTokensRecoveryCount,
+			maxAttempts: MAX_OUTPUT_TOKEN_RECOVERIES,
+		});
+
+		// Inject recovery message directly into agent state (not persisted to session)
+		const recoveryMessage: AgentMessage = {
+			role: "user",
+			content: [
+				{
+					type: "text",
+					text: "Output token limit hit. Resume directly — no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.",
+				},
+			],
+			timestamp: Date.now(),
+		};
+
+		this.agent.state.messages.push(recoveryMessage);
+
+		// Use setTimeout to break out of the event handler chain
+		setTimeout(() => {
+			this.agent.continue().catch(() => {});
+		}, 0);
+
+		return true;
+	}
+
 	private async _handleRetryableError(message: AssistantMessage): Promise<boolean> {
 		const settings = this.settingsManager.getRetrySettings();
 		if (!settings.enabled) {
