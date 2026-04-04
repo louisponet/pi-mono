@@ -6,7 +6,7 @@ import { AgentSession } from "./agent-session.js";
 import { AuthStorage } from "./auth-storage.js";
 import { analyzeContextComposition, applyMicrocompact, applyToolResultLimits } from "./context-management/index.js";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
-import type { ExtensionRunner, LoadExtensionsResult, ToolDefinition } from "./extensions/index.js";
+import type { ExtensionRunner, LoadExtensionsResult, SessionStartEvent, ToolDefinition } from "./extensions/index.js";
 import { convertToLlm } from "./messages.js";
 import { ModelRegistry } from "./model-registry.js";
 import { findInitialModel } from "./model-resolver.js";
@@ -81,6 +81,8 @@ export interface CreateAgentSessionOptions {
 	 * overwriting the user's preferred default model in the shared settings file.
 	 */
 	persistModelChanges?: boolean;
+	/** Session start event metadata for extension runtime startup. */
+	sessionStartEvent?: SessionStartEvent;
 }
 
 /** Result from createAgentSession */
@@ -95,6 +97,7 @@ export interface CreateAgentSessionResult {
 
 // Re-exports
 
+export * from "./agent-session-runtime.js";
 export type {
 	ExtensionAPI,
 	ExtensionCommandContext,
@@ -382,6 +385,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		initialActiveToolNames,
 		extensionRunnerRef,
 		persistModelChanges: options.persistModelChanges,
+		sessionStartEvent: options.sessionStartEvent,
 	});
 	const extensionsResult = resourceLoader.getExtensions();
 
