@@ -467,6 +467,45 @@ describe("Cache Retention (PI_CACHE_RETENTION)", () => {
 			expect(capturedPayload.prompt_cache_retention).toBe("24h");
 		});
 
+		it("should set prompt_cache_key but not prompt_cache_retention for Venice provider", async () => {
+			let capturedPayload: any = null;
+			const { streamOpenAICompletions } = await import("../src/providers/openai-completions.js");
+
+			const veniceModel: Model<"openai-completions"> = {
+				id: "test-venice-model",
+				name: "Test Venice Model",
+				api: "openai-completions",
+				provider: "venice",
+				baseUrl: "https://api.venice.ai/api/v1",
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 128000,
+				maxTokens: 4096,
+			};
+
+			try {
+				const s = streamOpenAICompletions(veniceModel, context, {
+					apiKey: "fake-key",
+					cacheRetention: "long",
+					sessionId: "session-venice",
+					onPayload: (payload) => {
+						capturedPayload = payload;
+					},
+				});
+
+				for await (const event of s) {
+					if (event.type === "error") break;
+				}
+			} catch {
+				// Expected to fail
+			}
+
+			expect(capturedPayload).not.toBeNull();
+			expect(capturedPayload.prompt_cache_key).toBe("session-venice");
+			expect(capturedPayload.prompt_cache_retention).toBeUndefined();
+		});
+
 		it("should omit prompt_cache_retention when supportsLongCacheRetention is false", async () => {
 			let capturedPayload: any = null;
 

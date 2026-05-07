@@ -809,6 +809,7 @@ function buildParams(
 		stream: true,
 		prompt_cache_key:
 			(model.baseUrl.includes("api.openai.com") && cacheRetention !== "none") ||
+			(model.provider === "venice" && cacheRetention !== "none") ||
 			(cacheRetention === "long" && compat.supportsLongCacheRetention)
 				? clampOpenAIPromptCacheKey(options?.sessionId)
 				: undefined,
@@ -964,11 +965,6 @@ function buildParams(
 	// response and leave no answer and no tool call.
 	if (thinkingTokenBudgetField && thinkingBudget !== undefined) {
 		Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
-	}
-
-	// Venice-specific parameters
-	if (compat.veniceParameters) {
-		(params as any).venice_parameters = compat.veniceParameters;
 	}
 
 	// OpenRouter provider routing preferences
@@ -1671,7 +1667,9 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 			isCloudflareWorkersAI ||
 			isCloudflareAiGateway ||
 			isNvidia ||
-			isAntLing
+			isAntLing ||
+			provider === "venice" ||
+			baseUrl.includes("api.venice.ai")
 		),
 	};
 }
