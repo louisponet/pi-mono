@@ -42,6 +42,7 @@ This table covers providers with a single primary API-key variable. Providers th
 | Cerebras | `CEREBRAS_API_KEY` |
 | xAI | `XAI_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
+| Venice | `VENICE_API_KEY` |
 | Vercel AI Gateway | `AI_GATEWAY_API_KEY` |
 | ZAI Coding Plan (Global) | `ZAI_API_KEY` |
 | ZAI Coding Plan (China) | `ZAI_CODING_CN_API_KEY` |
@@ -77,7 +78,8 @@ To use a secret manager without writing the resolved key to disk, set a provider
   "anthropic": {
     "type": "api_key",
     "key": "!security find-generic-password -ws 'anthropic'"
-  }
+  },
+  "venice": { "type": "api_key", "key": "..." }
 }
 ```
 

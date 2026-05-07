@@ -341,6 +341,12 @@ export const OpenAICompletionsCompatSchema = Type.Object(
 					"vLLM scheduler priority sent as the top-level priority request field. Lower values are handled earlier and the server default is 0. Only meaningful with --scheduling-policy priority. Off by default and not set on the generated catalog.",
 			}),
 		),
+		veniceParameters: Type.Optional(
+			Type.Record(Type.String(), Type.Unknown(), {
+				description:
+					"Venice-specific parameters injected into the venice_parameters request body field. Default: { include_venice_system_prompt: false }.",
+			}),
+		),
 	},
 	{
 		description:

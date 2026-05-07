@@ -1775,6 +1775,57 @@ function processFireworksModels(provider: ModelsDevProvider | undefined): Model<
 	}
 
 	return models;
+async function fetchVeniceModels(): Promise<Model<any>[]> {
+	try {
+		console.log("Fetching models from Venice API...");
+		const response = await fetch("https://api.venice.ai/api/v1/models");
+		const data = await response.json();
+
+		const models: Model<any>[] = [];
+
+		const items = Array.isArray(data.data) ? data.data : [];
+		for (const model of items) {
+			if (model.type !== "text") continue;
+			if (model.model_spec?.available === false) continue;
+
+			const caps = model.model_spec?.capabilities || {};
+			const input: ("text" | "image")[] = ["text"];
+			if (caps.supportsVision) {
+				input.push("image");
+			}
+
+			models.push({
+				id: model.id,
+				name: model.name || model.id,
+				api: "openai-completions",
+				provider: "venice",
+				baseUrl: "https://api.venice.ai/api/v1",
+				reasoning: caps.supportsReasoning === true,
+				input,
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+				},
+				contextWindow: caps.maxContextTokens || 131072,
+				maxTokens: caps.maxOutputTokens || 16384,
+				compat: {
+					supportsStore: false,
+					supportsDeveloperRole: false,
+					supportsReasoningEffort: true,
+					maxTokensField: "max_completion_tokens",
+					veniceParameters: { include_venice_system_prompt: false },
+				},
+			});
+		}
+
+		console.log(`Fetched ${models.length} text models from Venice`);
+		return models;
+	} catch (error) {
+		console.error("Failed to fetch Venice models:", error);
+		return [];
+	}
 }
 
 // Kimi Coding is subscription-backed, so models.dev reports zero cost. Use the
@@ -2761,9 +2812,16 @@ async function generateModels() {
 	const openRouterCatalog = await fetchOpenRouterModels();
 	const aiGatewayCatalog = await fetchAiGatewayModels();
 	const radiusModels = await fetchRadiusModels();
+	const veniceModels = await fetchVeniceModels();
 
 	// Combine chat models (models.dev has priority where sources overlap).
-	const allModels = [...modelsDevModels, ...openRouterCatalog.chat, ...aiGatewayCatalog.chat, ...radiusModels].filter(
+	const allModels = [
+		...modelsDevModels,
+		...openRouterCatalog.chat,
+		...aiGatewayCatalog.chat,
+		...radiusModels,
+		...veniceModels,
+	].filter(
 		(model) =>
 			!(model.provider === "xai" && XAI_BUILTIN_EXCLUDED_MODEL_IDS.has(model.id)) &&
 			!((model.provider === "opencode" || model.provider === "opencode-go") && model.id === "gpt-5.3-codex-spark"),
