@@ -178,12 +178,17 @@ interface OpenAICompatCacheControl {
 
 type ResolvedOpenAICompletionsCompat = Omit<
 	Required<OpenAICompletionsCompat>,
-	"cacheControlFormat" | "deferredToolsMode" | "supportsThinkingTokenBudget" | "thinkingTokenBudgetField"
+	| "cacheControlFormat"
+	| "deferredToolsMode"
+	| "supportsThinkingTokenBudget"
+	| "thinkingTokenBudgetField"
+	| "veniceParameters"
 > & {
 	cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
 	deferredToolsMode?: OpenAICompletionsCompat["deferredToolsMode"];
 	supportsThinkingTokenBudget?: OpenAICompletionsCompat["supportsThinkingTokenBudget"];
 	thinkingTokenBudgetField?: OpenAICompletionsCompat["thinkingTokenBudgetField"];
+	veniceParameters?: OpenAICompletionsCompat["veniceParameters"];
 };
 
 type ResolvedChatTemplateKwargValue = string | number | boolean | null;
@@ -959,6 +964,11 @@ function buildParams(
 	// response and leave no answer and no tool call.
 	if (thinkingTokenBudgetField && thinkingBudget !== undefined) {
 		Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
+	}
+
+	// Venice-specific parameters
+	if (compat.veniceParameters) {
+		(params as any).venice_parameters = compat.veniceParameters;
 	}
 
 	// OpenRouter provider routing preferences

@@ -19,9 +19,13 @@ const emptyUsage: Usage = {
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
-const compat: Omit<Required<OpenAICompletionsCompat>, "deferredToolsMode" | "thinkingTokenBudgetField"> & {
+const compat: Omit<
+	Required<OpenAICompletionsCompat>,
+	"deferredToolsMode" | "thinkingTokenBudgetField" | "veniceParameters"
+> & {
 	deferredToolsMode?: OpenAICompletionsCompat["deferredToolsMode"];
 	thinkingTokenBudgetField?: OpenAICompletionsCompat["thinkingTokenBudgetField"];
+	veniceParameters?: OpenAICompletionsCompat["veniceParameters"];
 } = {
 	supportsStore: true,
 	supportsDeveloperRole: true,
