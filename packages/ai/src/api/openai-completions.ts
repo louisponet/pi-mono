@@ -175,15 +175,14 @@ type ResolvedOpenAICompletionsCompat = Omit<
 	| "supportsMidConvoSystemMessages"
 	| "supportsMidConvoToolAdditions"
 	| "vllmPriority"
-	| "veniceParameters"
 > & {
 	cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
+<<<<<<< HEAD
 	supportsThinkingTokenBudget?: OpenAICompletionsCompat["supportsThinkingTokenBudget"];
 	thinkingTokenBudgetField?: OpenAICompletionsCompat["thinkingTokenBudgetField"];
 	supportsMidConvoSystemMessages?: OpenAICompletionsCompat["supportsMidConvoSystemMessages"];
 	supportsMidConvoToolAdditions?: OpenAICompletionsCompat["supportsMidConvoToolAdditions"];
 	vllmPriority?: OpenAICompletionsCompat["vllmPriority"];
-	veniceParameters?: OpenAICompletionsCompat["veniceParameters"];
 };
 
 type ResolvedChatTemplateKwargValue = string | number | boolean | null;
@@ -829,6 +828,7 @@ function buildParams(
 		stream: true,
 		prompt_cache_key:
 			(model.baseUrl.includes("api.openai.com") && cacheRetention !== "none") ||
+			(model.provider === "venice" && cacheRetention !== "none") ||
 			(cacheRetention === "long" && compat.supportsLongCacheRetention)
 				? clampOpenAIPromptCacheKey(options?.sessionId)
 				: undefined,
@@ -980,6 +980,7 @@ function buildParams(
 		}
 	}
 
+<<<<<<< HEAD
 	// Cap reasoning with a top-level budget field. Independent of thinkingFormat: the
 	// same server can serve zai, qwen or chat-template models. Reasoning and the answer
 	// share max_tokens here, so an uncapped reasoning phase can consume the whole
@@ -988,10 +989,6 @@ function buildParams(
 		Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
 	}
 
-	// Venice-specific parameters
-	if (compat.veniceParameters) {
-		(params as any).venice_parameters = compat.veniceParameters;
-	}
 
 	// OpenRouter provider routing preferences
 	if (model.compat?.openRouterRouting) {
@@ -1693,7 +1690,9 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 			isCloudflareWorkersAI ||
 			isCloudflareAiGateway ||
 			isNvidia ||
-			isAntLing
+			isAntLing ||
+			provider === "venice" ||
+			baseUrl.includes("api.venice.ai")
 		),
 	};
 }

@@ -151,6 +151,39 @@ describe("openai-completions prompt caching", () => {
 		expect(payload?.prompt_cache_retention).toBeUndefined();
 	});
 
+	it("sets prompt_cache_key but omits prompt_cache_retention for Venice provider", async () => {
+		const veniceModel = createModel({
+			provider: "venice",
+			baseUrl: "https://api.venice.ai/api/v1",
+		});
+		const { payload } = await captureRequest({ sessionId: "session-venice" }, veniceModel);
+
+		expect(payload?.prompt_cache_key).toBe("session-venice");
+		expect(payload?.prompt_cache_retention).toBeUndefined();
+	});
+
+	it("sets prompt_cache_key for Venice with long cacheRetention", async () => {
+		const veniceModel = createModel({
+			provider: "venice",
+			baseUrl: "https://api.venice.ai/api/v1",
+		});
+		const { payload } = await captureRequest({ cacheRetention: "long", sessionId: "session-venice" }, veniceModel);
+
+		expect(payload?.prompt_cache_key).toBe("session-venice");
+		expect(payload?.prompt_cache_retention).toBeUndefined();
+	});
+
+	it("omits prompt_cache_key for Venice when cacheRetention is none", async () => {
+		const veniceModel = createModel({
+			provider: "venice",
+			baseUrl: "https://api.venice.ai/api/v1",
+		});
+		const { payload } = await captureRequest({ cacheRetention: "none", sessionId: "session-venice" }, veniceModel);
+
+		expect(payload?.prompt_cache_key).toBeUndefined();
+		expect(payload?.prompt_cache_retention).toBeUndefined();
+	});
+
 	it("uses PI_CACHE_RETENTION for direct OpenAI requests", async () => {
 		process.env.PI_CACHE_RETENTION = "long";
 		const { payload } = await captureRequest({ sessionId: "session-env" });
