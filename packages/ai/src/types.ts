@@ -48,6 +48,7 @@ export type KnownProvider =
 	| "groq"
 	| "cerebras"
 	| "openrouter"
+	| "venice"
 	| "vercel-ai-gateway"
 	| "zai"
 	| "zai-coding-cn"
@@ -528,6 +529,8 @@ export interface OpenAICompletionsCompat {
 	sessionAffinityFormat?: SessionAffinityFormat;
 	/** Whether the provider supports long prompt cache retention (`prompt_cache_retention: "24h"` or Anthropic-style `cache_control.ttl: "1h"`, depending on format). Default: true. */
 	supportsLongCacheRetention?: boolean;
+	/** Venice-specific parameters injected into the `venice_parameters` request body field. Default: `{ include_venice_system_prompt: false }`. */
+	veniceParameters?: Record<string, unknown>;
 }
 
 /** Compatibility settings for OpenAI Responses APIs. */

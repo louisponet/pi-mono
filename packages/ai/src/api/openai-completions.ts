@@ -117,8 +117,12 @@ interface OpenAICompatCacheControl {
 	ttl?: string;
 }
 
-type ResolvedOpenAICompletionsCompat = Omit<Required<OpenAICompletionsCompat>, "cacheControlFormat"> & {
+type ResolvedOpenAICompletionsCompat = Omit<
+	Required<OpenAICompletionsCompat>,
+	"cacheControlFormat" | "veniceParameters"
+> & {
 	cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
+	veniceParameters?: OpenAICompletionsCompat["veniceParameters"];
 };
 
 type ResolvedChatTemplateKwargValue = string | number | boolean | null;
@@ -677,6 +681,11 @@ function buildParams(
 		if (typeof offValue === "string") {
 			(params as any).reasoning_effort = offValue;
 		}
+	}
+
+	// Venice-specific parameters
+	if (compat.veniceParameters) {
+		(params as any).venice_parameters = compat.veniceParameters;
 	}
 
 	// OpenRouter provider routing preferences

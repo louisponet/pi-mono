@@ -72,6 +72,7 @@ Unified LLM API with provider collections, automatic auth resolution, token and 
 - **Cloudflare Workers AI**
 - **xAI**
 - **OpenRouter**
+- **Venice**
 - **Vercel AI Gateway**
 - **ZAI Coding Plan (Global)** (with separate China provider)
 - **MiniMax** (with separate China provider)
@@ -425,6 +426,7 @@ Built-in providers resolve these env vars (Node.js; in browsers pass `apiKey` ex
 | Fireworks | `FIREWORKS_API_KEY` |
 | Together AI | `TOGETHER_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
+| Venice | `VENICE_API_KEY` |
 | Vercel AI Gateway | `AI_GATEWAY_API_KEY` |
 | ZAI Coding Plan (Global) | `ZAI_API_KEY` |
 | ZAI Coding Plan (China) | `ZAI_CODING_CN_API_KEY` |
