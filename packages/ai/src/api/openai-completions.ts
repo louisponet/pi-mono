@@ -175,14 +175,15 @@ type ResolvedOpenAICompletionsCompat = Omit<
 	| "supportsMidConvoSystemMessages"
 	| "supportsMidConvoToolAdditions"
 	| "vllmPriority"
+	| "veniceParameters"
 > & {
 	cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
-<<<<<<< HEAD
 	supportsThinkingTokenBudget?: OpenAICompletionsCompat["supportsThinkingTokenBudget"];
 	thinkingTokenBudgetField?: OpenAICompletionsCompat["thinkingTokenBudgetField"];
 	supportsMidConvoSystemMessages?: OpenAICompletionsCompat["supportsMidConvoSystemMessages"];
 	supportsMidConvoToolAdditions?: OpenAICompletionsCompat["supportsMidConvoToolAdditions"];
 	vllmPriority?: OpenAICompletionsCompat["vllmPriority"];
+	veniceParameters?: OpenAICompletionsCompat["veniceParameters"];
 };
 
 type ResolvedChatTemplateKwargValue = string | number | boolean | null;
@@ -980,7 +981,6 @@ function buildParams(
 		}
 	}
 
-<<<<<<< HEAD
 	// Cap reasoning with a top-level budget field. Independent of thinkingFormat: the
 	// same server can serve zai, qwen or chat-template models. Reasoning and the answer
 	// share max_tokens here, so an uncapped reasoning phase can consume the whole
@@ -989,10 +989,13 @@ function buildParams(
 		Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
 	}
 
-
 	// OpenRouter provider routing preferences
 	if (model.compat?.openRouterRouting) {
 		(params as any).provider = model.compat.openRouterRouting;
+	}
+
+	if (compat.veniceParameters) {
+		(params as any).venice_parameters = compat.veniceParameters;
 	}
 
 	// Vercel AI Gateway provider routing preferences
@@ -1615,6 +1618,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	const isAntLing = provider === "ant-ling" || baseUrl.includes("api.ant-ling.com");
 	const isCerebras = provider === "cerebras" || baseUrl.includes("cerebras.ai");
 	const isDeepSeek = provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com");
+	const isVenice = provider === "venice" || baseUrl.includes("api.venice.ai");
 
 	const isNonStandard =
 		isNvidia ||
@@ -1630,7 +1634,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		baseUrl.includes("opencode.ai") ||
 		isCloudflareWorkersAI ||
 		isCloudflareAiGateway ||
-		isAntLing;
+		isAntLing ||
+		isVenice;
 
 	const useMaxTokens =
 		baseUrl.includes("chutes.ai") ||
@@ -1685,14 +1690,14 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		cacheControlFormat,
 		sendSessionAffinityHeaders: isOpenRouter,
 		sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
+		veniceParameters: isVenice ? { include_venice_system_prompt: false } : undefined,
 		supportsLongCacheRetention: !(
 			isTogether ||
 			isCloudflareWorkersAI ||
 			isCloudflareAiGateway ||
 			isNvidia ||
 			isAntLing ||
-			provider === "venice" ||
-			baseUrl.includes("api.venice.ai")
+			isVenice
 		),
 	};
 }
@@ -1736,6 +1741,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
 		cacheControlFormat: model.compat.cacheControlFormat ?? detected.cacheControlFormat,
 		sendSessionAffinityHeaders: model.compat.sendSessionAffinityHeaders ?? detected.sendSessionAffinityHeaders,
 		sessionAffinityFormat: model.compat.sessionAffinityFormat ?? detected.sessionAffinityFormat,
+		veniceParameters: model.compat.veniceParameters ?? detected.veniceParameters,
 		supportsLongCacheRetention: model.compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
 		vllmPriority: model.compat.vllmPriority,
 	};
