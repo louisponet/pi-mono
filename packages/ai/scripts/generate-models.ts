@@ -164,6 +164,40 @@ interface AiGatewayModel {
 	};
 }
 
+interface VeniceModelPricingUnit {
+	usd?: number;
+	diem?: number;
+}
+
+interface VeniceModelCapabilities {
+	supportsVision?: boolean;
+	supportsReasoning?: boolean;
+	supportsReasoningEffort?: boolean;
+	reasoningEffortOptions?: string[];
+}
+
+interface VeniceModelSpec {
+	available?: boolean;
+	name?: string | null;
+	availableContextTokens?: number | null;
+	maxCompletionTokens?: number | null;
+	capabilities?: VeniceModelCapabilities;
+	pricing?: {
+		input?: VeniceModelPricingUnit;
+		output?: VeniceModelPricingUnit;
+		cache_input?: VeniceModelPricingUnit;
+		cache_write?: VeniceModelPricingUnit;
+	};
+}
+
+interface VeniceModel {
+	id: string;
+	name?: string | null;
+	type?: string;
+	context_length?: number | null;
+	model_spec?: VeniceModelSpec;
+}
+
 const COPILOT_STATIC_HEADERS = {
 	"User-Agent": "GitHubCopilotChat/0.35.0",
 	"Editor-Version": "vscode/1.107.0",
@@ -1425,11 +1459,40 @@ function processFireworksModels(provider: ModelsDevProvider | undefined): Model<
 	return models;
 }
 
+function getVeniceUsd(price: VeniceModelPricingUnit | undefined): number {
+	return typeof price?.usd === "number" && Number.isFinite(price.usd) ? price.usd : 0;
+}
+
+function getVeniceThinkingLevelMap(
+	capabilities: VeniceModelCapabilities,
+): NonNullable<Model<Api>["thinkingLevelMap"]> | undefined {
+	if (capabilities.supportsReasoningEffort !== true || !capabilities.reasoningEffortOptions?.length) {
+		return undefined;
+	}
+
+	const supported = new Set(capabilities.reasoningEffortOptions);
+	const map: NonNullable<Model<Api>["thinkingLevelMap"]> = {};
+	if (supported.has("none")) map.off = "none";
+	if (!supported.has("minimal")) map.minimal = null;
+	if (!supported.has("low")) map.low = null;
+	if (!supported.has("medium")) map.medium = null;
+	if (!supported.has("high")) map.high = null;
+	if (supported.has("xhigh")) {
+		map.xhigh = "xhigh";
+	} else if (supported.has("max")) {
+		map.xhigh = "max";
+	} else {
+		map.xhigh = null;
+	}
+
+	return Object.keys(map).length > 0 ? map : undefined;
+}
+
 async function fetchVeniceModels(): Promise<Model<any>[]> {
 	try {
 		console.log("Fetching models from Venice API...");
 		const response = await fetch("https://api.venice.ai/api/v1/models");
-		const data = await response.json();
+		const data = (await response.json()) as { data?: VeniceModel[] };
 
 		const models: Model<any>[] = [];
 
@@ -1438,36 +1501,44 @@ async function fetchVeniceModels(): Promise<Model<any>[]> {
 			if (model.type !== "text") continue;
 			if (model.model_spec?.available === false) continue;
 
-			const caps = model.model_spec?.capabilities || {};
+			const spec = model.model_spec;
+			const caps = spec?.capabilities ?? {};
 			const input: ("text" | "image")[] = ["text"];
 			if (caps.supportsVision) {
 				input.push("image");
 			}
 
-			models.push({
+			const normalizedModel: Model<any> = {
 				id: model.id,
-				name: model.name || model.id,
+				name: spec?.name || model.name || model.id,
 				api: "openai-completions",
 				provider: "venice",
 				baseUrl: "https://api.venice.ai/api/v1",
 				reasoning: caps.supportsReasoning === true,
 				input,
 				cost: {
-					input: 0,
-					output: 0,
-					cacheRead: 0,
-					cacheWrite: 0,
+					input: getVeniceUsd(spec?.pricing?.input),
+					output: getVeniceUsd(spec?.pricing?.output),
+					cacheRead: getVeniceUsd(spec?.pricing?.cache_input),
+					cacheWrite: getVeniceUsd(spec?.pricing?.cache_write),
 				},
-				contextWindow: caps.maxContextTokens || 131072,
-				maxTokens: caps.maxOutputTokens || 16384,
+				contextWindow: spec?.availableContextTokens || model.context_length || 131072,
+				maxTokens: spec?.maxCompletionTokens || 16384,
 				compat: {
 					supportsStore: false,
 					supportsDeveloperRole: false,
-					supportsReasoningEffort: true,
+					supportsReasoningEffort: caps.supportsReasoningEffort === true,
 					maxTokensField: "max_completion_tokens",
 					veniceParameters: { include_venice_system_prompt: false },
 				},
-			});
+			};
+
+			const thinkingLevelMap = getVeniceThinkingLevelMap(caps);
+			if (thinkingLevelMap) {
+				normalizedModel.thinkingLevelMap = thinkingLevelMap;
+			}
+
+			models.push(normalizedModel);
 		}
 
 		console.log(`Fetched ${models.length} text models from Venice`);

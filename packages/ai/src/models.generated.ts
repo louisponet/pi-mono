@@ -32,6 +32,7 @@ import { QWEN_TOKEN_PLAN_MODELS } from "./providers/qwen-token-plan.models.ts";
 import { QWEN_TOKEN_PLAN_CN_MODELS } from "./providers/qwen-token-plan-cn.models.ts";
 import { QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS } from "./providers/qwen-token-plan-individual.models.ts";
 import { TOGETHER_MODELS } from "./providers/together.models.ts";
+import { VENICE_MODELS } from "./providers/venice.models.ts";
 import { VERCEL_AI_GATEWAY_MODELS } from "./providers/vercel-ai-gateway.models.ts";
 import { XAI_MODELS } from "./providers/xai.models.ts";
 import { XIAOMI_MODELS } from "./providers/xiaomi.models.ts";
@@ -113,6 +114,7 @@ export const MODELS: {
 	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_MODELS,
 	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS,
 	"together": TOGETHER_MODELS,
+	"venice": VENICE_MODELS,
 	"vercel-ai-gateway": VERCEL_AI_GATEWAY_MODELS,
 	"xai": XAI_MODELS,
 	"xiaomi": XIAOMI_MODELS,

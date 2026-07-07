@@ -972,6 +972,10 @@ function buildParams(
 		(params as any).provider = model.compat.openRouterRouting;
 	}
 
+	if (compat.veniceParameters) {
+		(params as any).venice_parameters = compat.veniceParameters;
+	}
+
 	// Vercel AI Gateway provider routing preferences
 	if (model.compat?.vercelGatewayRouting) {
 		const routing = model.compat.vercelGatewayRouting;
@@ -1593,6 +1597,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	const isNvidia = provider === "nvidia" || baseUrl.includes("integrate.api.nvidia.com");
 	const isAntLing = provider === "ant-ling" || baseUrl.includes("api.ant-ling.com");
 	const isDeepSeek = provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com");
+	const isVenice = provider === "venice" || baseUrl.includes("api.venice.ai");
 
 	const isNonStandard =
 		isNvidia ||
@@ -1609,7 +1614,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		baseUrl.includes("opencode.ai") ||
 		isCloudflareWorkersAI ||
 		isCloudflareAiGateway ||
-		isAntLing;
+		isAntLing ||
+		isVenice;
 
 	const useMaxTokens =
 		baseUrl.includes("chutes.ai") ||
@@ -1662,14 +1668,14 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		sendSessionAffinityHeaders: false,
 		deferredToolsMode: undefined,
 		sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
+		veniceParameters: isVenice ? { include_venice_system_prompt: false } : undefined,
 		supportsLongCacheRetention: !(
 			isTogether ||
 			isCloudflareWorkersAI ||
 			isCloudflareAiGateway ||
 			isNvidia ||
 			isAntLing ||
-			provider === "venice" ||
-			baseUrl.includes("api.venice.ai")
+			isVenice
 		),
 	};
 }
@@ -1710,6 +1716,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
 		sendSessionAffinityHeaders: model.compat.sendSessionAffinityHeaders ?? detected.sendSessionAffinityHeaders,
 		deferredToolsMode: model.compat.deferredToolsMode ?? detected.deferredToolsMode,
 		sessionAffinityFormat: model.compat.sessionAffinityFormat ?? detected.sessionAffinityFormat,
+		veniceParameters: model.compat.veniceParameters ?? detected.veniceParameters,
 		supportsLongCacheRetention: model.compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
 	};
 }
