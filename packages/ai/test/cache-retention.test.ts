@@ -438,7 +438,6 @@ describe("Cache Retention (PI_CACHE_RETENTION)", () => {
 
 		it("should set prompt_cache_key but not prompt_cache_retention for Venice provider", async () => {
 			let capturedPayload: any = null;
-			const { streamOpenAICompletions } = await import("../src/providers/openai-completions.js");
 
 			const veniceModel: Model<"openai-completions"> = {
 				id: "test-venice-model",

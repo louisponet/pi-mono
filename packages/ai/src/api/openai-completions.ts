@@ -117,8 +117,12 @@ interface OpenAICompatCacheControl {
 	ttl?: string;
 }
 
-type ResolvedOpenAICompletionsCompat = Omit<Required<OpenAICompletionsCompat>, "cacheControlFormat"> & {
+type ResolvedOpenAICompletionsCompat = Omit<
+	Required<OpenAICompletionsCompat>,
+	"cacheControlFormat" | "veniceParameters"
+> & {
 	cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
+	veniceParameters?: OpenAICompletionsCompat["veniceParameters"];
 };
 
 type ResolvedChatTemplateKwargValue = string | number | boolean | null;
@@ -685,6 +689,10 @@ function buildParams(
 		(params as any).provider = model.compat.openRouterRouting;
 	}
 
+	if (compat.veniceParameters) {
+		(params as any).venice_parameters = compat.veniceParameters;
+	}
+
 	// Vercel AI Gateway provider routing preferences
 	if (model.compat?.vercelGatewayRouting) {
 		const routing = model.compat.vercelGatewayRouting;
@@ -1201,6 +1209,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	const isCloudflareAiGateway = provider === "cloudflare-ai-gateway" || baseUrl.includes("gateway.ai.cloudflare.com");
 	const isNvidia = provider === "nvidia" || baseUrl.includes("integrate.api.nvidia.com");
 	const isAntLing = provider === "ant-ling" || baseUrl.includes("api.ant-ling.com");
+	const isVenice = provider === "venice" || baseUrl.includes("api.venice.ai");
 
 	const isNonStandard =
 		isNvidia ||
@@ -1217,7 +1226,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		baseUrl.includes("opencode.ai") ||
 		isCloudflareWorkersAI ||
 		isCloudflareAiGateway ||
-		isAntLing;
+		isAntLing ||
+		isVenice;
 
 	const useMaxTokens =
 		baseUrl.includes("chutes.ai") || isMoonshot || isCloudflareAiGateway || isTogether || isNvidia || isAntLing;
@@ -1258,14 +1268,14 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		cacheControlFormat,
 		sendSessionAffinityHeaders: false,
 		sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
+		veniceParameters: isVenice ? { include_venice_system_prompt: false } : undefined,
 		supportsLongCacheRetention: !(
 			isTogether ||
 			isCloudflareWorkersAI ||
 			isCloudflareAiGateway ||
 			isNvidia ||
 			isAntLing ||
-			provider === "venice" ||
-			baseUrl.includes("api.venice.ai")
+			isVenice
 		),
 	};
 }
@@ -1300,6 +1310,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
 		cacheControlFormat: model.compat.cacheControlFormat ?? detected.cacheControlFormat,
 		sendSessionAffinityHeaders: model.compat.sendSessionAffinityHeaders ?? detected.sendSessionAffinityHeaders,
 		sessionAffinityFormat: model.compat.sessionAffinityFormat ?? detected.sessionAffinityFormat,
+		veniceParameters: model.compat.veniceParameters ?? detected.veniceParameters,
 		supportsLongCacheRetention: model.compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
 	};
 }
