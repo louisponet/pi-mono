@@ -1471,21 +1471,15 @@ function getVeniceThinkingLevelMap(
 	}
 
 	const supported = new Set(capabilities.reasoningEffortOptions);
-	const map: NonNullable<Model<Api>["thinkingLevelMap"]> = {};
-	if (supported.has("none")) map.off = "none";
-	if (!supported.has("minimal")) map.minimal = null;
-	if (!supported.has("low")) map.low = null;
-	if (!supported.has("medium")) map.medium = null;
-	if (!supported.has("high")) map.high = null;
-	if (supported.has("xhigh")) {
-		map.xhigh = "xhigh";
-	} else if (supported.has("max")) {
-		map.xhigh = "max";
-	} else {
-		map.xhigh = null;
-	}
-
-	return Object.keys(map).length > 0 ? map : undefined;
+	return {
+		off: supported.has("none") ? "none" : null,
+		minimal: supported.has("minimal") ? "minimal" : null,
+		low: supported.has("low") ? "low" : null,
+		medium: supported.has("medium") ? "medium" : null,
+		high: supported.has("high") ? "high" : null,
+		xhigh: supported.has("xhigh") ? "xhigh" : null,
+		max: supported.has("max") ? "max" : null,
+	};
 }
 
 async function fetchVeniceModels(): Promise<Model<any>[]> {
@@ -1533,7 +1527,19 @@ async function fetchVeniceModels(): Promise<Model<any>[]> {
 				},
 			};
 
-			const thinkingLevelMap = getVeniceThinkingLevelMap(caps);
+			const thinkingLevelMap =
+				getVeniceThinkingLevelMap(caps) ??
+				(model.id === "kimi-k3" && caps.supportsReasoning === true
+					? {
+							off: null,
+							minimal: null,
+							low: null,
+							medium: null,
+							high: null,
+							xhigh: null,
+							max: "max",
+						}
+					: undefined);
 			if (thinkingLevelMap) {
 				normalizedModel.thinkingLevelMap = thinkingLevelMap;
 			}

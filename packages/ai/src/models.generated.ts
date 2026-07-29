@@ -74,6 +74,7 @@ export const MODELS: {
 	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_MODELS;
 	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS;
 	readonly "together": typeof TOGETHER_MODELS;
+	readonly "venice": typeof VENICE_MODELS;
 	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_MODELS;
 	readonly "xai": typeof XAI_MODELS;
 	readonly "xiaomi": typeof XIAOMI_MODELS;

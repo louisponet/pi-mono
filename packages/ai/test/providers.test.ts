@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { lazyApi } from "../src/api/lazy.ts";
 import { envApiKeyAuth } from "../src/auth/helpers.ts";
 import type { AuthContext, AuthEvent } from "../src/auth/types.ts";
-import { createModels, createProvider } from "../src/models.ts";
+import { createModels, createProvider, getSupportedThinkingLevels } from "../src/models.ts";
 import { InMemoryModelsStore } from "../src/models-store.ts";
 import { builtinModels, builtinProviders, getBuiltinModel } from "../src/providers/all.ts";
 import { amazonBedrockProvider } from "../src/providers/amazon-bedrock.ts";
@@ -76,6 +76,18 @@ describe("builtin providers", () => {
 				cacheWrite: 0,
 			});
 		}
+	});
+
+	it("exposes Kimi K3 through Venice with its max-only reasoning mode", () => {
+		const model = builtinModels().getModel("venice", "kimi-k3");
+		expect(model).toMatchObject({
+			input: ["text", "image"],
+			contextWindow: 1000000,
+			maxTokens: 131072,
+		});
+		expect(model?.compat).toMatchObject({ supportsReasoningEffort: false });
+		expect(model?.thinkingLevelMap).toMatchObject({ xhigh: null, max: "max" });
+		expect(getSupportedThinkingLevels(model!)).toEqual(["max"]);
 	});
 
 	it("uses API-equivalent implied pricing for Kimi Coding subscription models", () => {
