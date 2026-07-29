@@ -272,6 +272,18 @@ describe("builtin providers", () => {
 		}
 	});
 
+	it("exposes Kimi K3 through Venice with its max-only reasoning mode", () => {
+		const model = builtinModels().getModel("venice", "kimi-k3");
+		expect(model).toMatchObject({
+			input: ["text", "image"],
+			contextWindow: 1000000,
+			maxTokens: 131072,
+		});
+		expect(model?.compat).toMatchObject({ supportsReasoningEffort: false });
+		expect(model?.thinkingLevelMap).toMatchObject({ xhigh: null, max: "max" });
+		expect(getSupportedThinkingLevels(model!)).toEqual(["max"]);
+	});
+
 	it("uses API-equivalent implied pricing for Kimi Coding subscription models", () => {
 		const models = builtinModels();
 		const expectedCosts = {
