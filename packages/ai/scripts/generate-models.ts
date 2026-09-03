@@ -2793,10 +2793,11 @@ async function generateModels() {
 			candidate.id.includes("deepseek-v4") &&
 			!QWEN_TOKEN_PLAN_PROVIDER_IDS.has(candidate.provider)
 		) {
-			const preservesNativeReasoningEffort = candidate.provider === "openrouter" || candidate.provider === "opencode";
+			const preservesProviderThinkingControls =
+				candidate.provider === "openrouter" || candidate.provider === "opencode" || candidate.provider === "venice";
 			candidate.compat = {
 				...candidate.compat,
-				...(preservesNativeReasoningEffort
+				...(preservesProviderThinkingControls
 					? {
 							requiresReasoningContentOnAssistantMessages:
 								deepseekCompat.requiresReasoningContentOnAssistantMessages,

@@ -189,6 +189,7 @@ type ResolvedOpenAICompletionsCompat = Omit<
 	supportsThinkingTokenBudget?: OpenAICompletionsCompat["supportsThinkingTokenBudget"];
 	thinkingTokenBudgetField?: OpenAICompletionsCompat["thinkingTokenBudgetField"];
 	veniceParameters?: OpenAICompletionsCompat["veniceParameters"];
+	requiresGoogleToolSchema?: boolean;
 };
 
 type ResolvedChatTemplateKwargValue = string | number | boolean | null;
@@ -1468,6 +1469,64 @@ export function convertMessages(
 	return params;
 }
 
+const GOOGLE_TOOL_SCHEMA_KEYS = new Set([
+	"anyOf",
+	"default",
+	"description",
+	"enum",
+	"example",
+	"format",
+	"items",
+	"maxItems",
+	"maxLength",
+	"maxProperties",
+	"maximum",
+	"minItems",
+	"minLength",
+	"minProperties",
+	"minimum",
+	"nullable",
+	"pattern",
+	"properties",
+	"propertyOrdering",
+	"required",
+	"title",
+	"type",
+]);
+
+function sanitizeGoogleToolSchema(schema: unknown): unknown {
+	if (typeof schema !== "object" || schema === null || Array.isArray(schema)) {
+		return schema;
+	}
+
+	const sanitized: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(schema)) {
+		if (key === "const") {
+			if (typeof value === "string") {
+				sanitized.enum = [value];
+			}
+			continue;
+		}
+		if (!GOOGLE_TOOL_SCHEMA_KEYS.has(key)) continue;
+		if (key === "properties" && typeof value === "object" && value !== null && !Array.isArray(value)) {
+			sanitized.properties = Object.fromEntries(
+				Object.entries(value).map(([name, property]) => [name, sanitizeGoogleToolSchema(property)]),
+			);
+		} else if (key === "items") {
+			sanitized.items = sanitizeGoogleToolSchema(value);
+		} else if (key === "anyOf" && Array.isArray(value)) {
+			sanitized.anyOf = value.map(sanitizeGoogleToolSchema);
+		} else if (key === "enum") {
+			if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+				sanitized.enum = value;
+			}
+		} else {
+			sanitized[key] = value;
+		}
+	}
+	return sanitized;
+}
+
 function convertTools(
 	tools: Tool[],
 	compat: ResolvedOpenAICompletionsCompat,
@@ -1492,12 +1551,16 @@ function convertTools(
 		}
 
 		const strict = resolveJsonSchemaStrictSampling(tool, compat.supportsStrictMode !== false);
+		const parameters = getJsonSchemaToolParameters(tool, strict);
 		return {
 			type: "function",
 			function: {
 				name: tool.name,
 				description: tool.description,
-				parameters: getJsonSchemaToolParameters(tool, strict) as Record<string, unknown>,
+				parameters: (compat.requiresGoogleToolSchema ? sanitizeGoogleToolSchema(parameters) : parameters) as Record<
+					string,
+					unknown
+				>,
 				// Only include strict if provider supports it. Some reject unknown fields.
 				...(compat.supportsStrictMode !== false && { strict: strict ?? false }),
 			},
@@ -1669,6 +1732,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		deferredToolsMode: undefined,
 		sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
 		veniceParameters: isVenice ? { include_venice_system_prompt: false } : undefined,
+		requiresGoogleToolSchema: isVenice && model.id.startsWith("gemini-"),
 		supportsLongCacheRetention: !(
 			isTogether ||
 			isCloudflareWorkersAI ||
@@ -1717,6 +1781,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
 		deferredToolsMode: model.compat.deferredToolsMode ?? detected.deferredToolsMode,
 		sessionAffinityFormat: model.compat.sessionAffinityFormat ?? detected.sessionAffinityFormat,
 		veniceParameters: model.compat.veniceParameters ?? detected.veniceParameters,
+		requiresGoogleToolSchema: detected.requiresGoogleToolSchema,
 		supportsLongCacheRetention: model.compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
 	};
 }
