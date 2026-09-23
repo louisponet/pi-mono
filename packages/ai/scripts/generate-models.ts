@@ -1809,6 +1809,8 @@ function processFireworksModels(provider: ModelsDevProvider | undefined): Model<
 	}
 
 	return models;
+}
+
 function getVeniceUsd(price: VeniceModelPricingUnit | undefined): number {
 	return typeof price?.usd === "number" && Number.isFinite(price.usd) ? price.usd : 0;
 }
