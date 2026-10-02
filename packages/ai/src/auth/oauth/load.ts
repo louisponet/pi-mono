@@ -16,6 +16,7 @@ type OAuthFlowLoaders = {
 	openaiCodex: () => OAuthAuth | Promise<OAuthAuth>;
 	openaiChatGPT: () => OAuthAuth | Promise<OAuthAuth>;
 	githubCopilot: () => OAuthAuth | Promise<OAuthAuth>;
+	geminiCli: () => OAuthAuth | Promise<OAuthAuth>;
 	openrouter: () => OAuthAuth | Promise<OAuthAuth>;
 	kimiCoding: () => OAuthAuth | Promise<OAuthAuth>;
 	meta: () => OAuthAuth | Promise<OAuthAuth>;
@@ -48,6 +49,11 @@ export const loadOpenAIChatGPTOAuth = async (): Promise<OAuthAuth> => {
 export const loadGitHubCopilotOAuth = async (): Promise<OAuthAuth> => {
 	if (bundledLoaders) return bundledLoaders.githubCopilot();
 	return ((await importOAuthModule("./github-copilot.ts")) as { githubCopilotOAuth: OAuthAuth }).githubCopilotOAuth;
+};
+
+export const loadGeminiCliOAuth = async (): Promise<OAuthAuth> => {
+	if (bundledLoaders) return bundledLoaders.geminiCli();
+	return ((await importOAuthModule("./google-gemini-cli.ts")) as { geminiCliOAuth: OAuthAuth }).geminiCliOAuth;
 };
 
 export const loadOpenRouterOAuth = async (): Promise<OAuthAuth> => {

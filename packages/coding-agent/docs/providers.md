@@ -5,7 +5,7 @@ Most hosted providers support one or both of these authentication methods:
 - Sign in through a browser or device flow backed by OAuth.
 - Provide an API key.
 
-Use `/login [provider]` to see the methods supported by a provider. Amazon Bedrock and Google Vertex AI can also use ambient cloud credentials.
+Use `/login [provider]` to see the methods supported by a provider. Google Gemini CLI signs in with a Google account and uses Cloud Code Assist; paid or Workspace accounts must set `GOOGLE_CLOUD_PROJECT`. Amazon Bedrock and Google Vertex AI can also use ambient cloud credentials.
 
 ## Authenticate interactively
 
