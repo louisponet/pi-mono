@@ -35,6 +35,7 @@ import { QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_INDIVIDUA
 import { RADIUS_CLASSIFIER_MODELS, RADIUS_IMAGE_MODELS, RADIUS_MODELS } from "./providers/radius.models.ts";
 import { TOGETHER_CLASSIFIER_MODELS, TOGETHER_IMAGE_MODELS, TOGETHER_MODELS } from "./providers/together.models.ts";
 import { TYPESAFE_CLASSIFIER_MODELS, TYPESAFE_IMAGE_MODELS, TYPESAFE_MODELS } from "./providers/typesafe.models.ts";
+import { VENICE_CLASSIFIER_MODELS, VENICE_IMAGE_MODELS, VENICE_MODELS } from "./providers/venice.models.ts";
 import { VERCEL_AI_GATEWAY_CLASSIFIER_MODELS, VERCEL_AI_GATEWAY_IMAGE_MODELS, VERCEL_AI_GATEWAY_MODELS } from "./providers/vercel-ai-gateway.models.ts";
 import { XAI_CLASSIFIER_MODELS, XAI_IMAGE_MODELS, XAI_MODELS } from "./providers/xai.models.ts";
 import { XIAOMI_CLASSIFIER_MODELS, XIAOMI_IMAGE_MODELS, XIAOMI_MODELS } from "./providers/xiaomi.models.ts";
@@ -79,6 +80,7 @@ export const MODELS: {
 	readonly "radius": typeof RADIUS_MODELS;
 	readonly "together": typeof TOGETHER_MODELS;
 	readonly "typesafe": typeof TYPESAFE_MODELS;
+	readonly "venice": typeof VENICE_MODELS;
 	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_MODELS;
 	readonly "xai": typeof XAI_MODELS;
 	readonly "xiaomi": typeof XIAOMI_MODELS;
@@ -122,6 +124,7 @@ export const MODELS: {
 	"radius": RADIUS_MODELS,
 	"together": TOGETHER_MODELS,
 	"typesafe": TYPESAFE_MODELS,
+	"venice": VENICE_MODELS,
 	"vercel-ai-gateway": VERCEL_AI_GATEWAY_MODELS,
 	"xai": XAI_MODELS,
 	"xiaomi": XIAOMI_MODELS,
@@ -167,6 +170,7 @@ export const IMAGE_MODELS: {
 	readonly "radius": typeof RADIUS_IMAGE_MODELS;
 	readonly "together": typeof TOGETHER_IMAGE_MODELS;
 	readonly "typesafe": typeof TYPESAFE_IMAGE_MODELS;
+	readonly "venice": typeof VENICE_IMAGE_MODELS;
 	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_IMAGE_MODELS;
 	readonly "xai": typeof XAI_IMAGE_MODELS;
 	readonly "xiaomi": typeof XIAOMI_IMAGE_MODELS;
@@ -210,6 +214,7 @@ export const IMAGE_MODELS: {
 	"radius": RADIUS_IMAGE_MODELS,
 	"together": TOGETHER_IMAGE_MODELS,
 	"typesafe": TYPESAFE_IMAGE_MODELS,
+	"venice": VENICE_IMAGE_MODELS,
 	"vercel-ai-gateway": VERCEL_AI_GATEWAY_IMAGE_MODELS,
 	"xai": XAI_IMAGE_MODELS,
 	"xiaomi": XIAOMI_IMAGE_MODELS,
@@ -255,6 +260,7 @@ export const CLASSIFIER_MODELS: {
 	readonly "radius": typeof RADIUS_CLASSIFIER_MODELS;
 	readonly "together": typeof TOGETHER_CLASSIFIER_MODELS;
 	readonly "typesafe": typeof TYPESAFE_CLASSIFIER_MODELS;
+	readonly "venice": typeof VENICE_CLASSIFIER_MODELS;
 	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_CLASSIFIER_MODELS;
 	readonly "xai": typeof XAI_CLASSIFIER_MODELS;
 	readonly "xiaomi": typeof XIAOMI_CLASSIFIER_MODELS;
@@ -298,6 +304,7 @@ export const CLASSIFIER_MODELS: {
 	"radius": RADIUS_CLASSIFIER_MODELS,
 	"together": TOGETHER_CLASSIFIER_MODELS,
 	"typesafe": TYPESAFE_CLASSIFIER_MODELS,
+	"venice": VENICE_CLASSIFIER_MODELS,
 	"vercel-ai-gateway": VERCEL_AI_GATEWAY_CLASSIFIER_MODELS,
 	"xai": XAI_CLASSIFIER_MODELS,
 	"xiaomi": XIAOMI_CLASSIFIER_MODELS,
