@@ -43,6 +43,8 @@ beforeEach(() => {
 		"WSL_DISTRO_NAME",
 		"WSLENV",
 		"PI_CLIPBOARD_OSC52",
+		"ZELLIJ",
+		"TMUX",
 	])
 		vi.stubEnv(name, "");
 	mocks.platform.mockReturnValue("darwin");
@@ -170,6 +172,18 @@ describe("copyToClipboard", () => {
 			expect(mocks.clipboard.setText).toHaveBeenCalledWith("hello");
 		}
 		expect(osc52Writes).toEqual([`\x1b]52;c;${Buffer.from("hello").toString("base64")}\x07`]);
+	});
+	test("a multiplexer session also emits OSC 52 for a client attached over SSH", async () => {
+		mocks.platform.mockReturnValue("linux");
+		vi.stubEnv("DISPLAY", ":0");
+		vi.stubEnv("ZELLIJ", "0");
+		mocks.command.mockResolvedValue(Buffer.alloc(0));
+		await copyToClipboard("hello");
+		expect(mocks.command).toHaveBeenCalledWith("xclip", ["-selection", "clipboard"], {
+			input: "hello",
+			timeoutMs: 5000,
+		});
+		expect(osc52Writes).toHaveLength(1);
 	});
 	test("a rejected native write falls back to pbcopy", async () => {
 		mocks.clipboard.setText.mockRejectedValue(new Error("native failed"));

@@ -127,9 +127,12 @@ export async function copyToClipboard(text: string): Promise<void> {
 	// OSC 52 cannot be verified, so a desktop session with a display reports the failure
 	// instead (#9618). Without a display the terminal is the only clipboard route (containers,
 	// WSL without WSLg), and remote sessions always emit it to reach the client clipboard.
+	// A multiplexer session can be attached over SSH after launch, which its environment
+	// cannot show, so it also emits it.
 	const headless = p === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY && !env.TERMUX_VERSION;
+	const multiplexed = Boolean(env.ZELLIJ || env.TMUX);
 	let oversized = false;
-	if (!osc52Emitted && (isRemoteSession(env) || (!copied && headless))) {
+	if (!osc52Emitted && (isRemoteSession(env) || multiplexed || (!copied && headless))) {
 		if (emitOsc52(text)) copied = true;
 		else oversized = true;
 	}
